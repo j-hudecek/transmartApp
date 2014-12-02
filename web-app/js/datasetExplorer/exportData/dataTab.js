@@ -85,8 +85,9 @@ function getDatadata() {
 /**
  *  Data Export Object
  * @constructor
+ * @param errorHandler function taking response status and message
  */
-var DataExport = function () {
+var DataExport = function() {
 
     this.records = null;
 
@@ -98,12 +99,32 @@ var DataExport = function () {
      * @private
      */
     var _getExportMetadataStore = function () {
-        return new Ext.data.JsonStore({
+        var ret = new Ext.data.JsonStore({
             url : pageInfo.basePath+'/dataExport/getMetaData',
             root : 'exportMetaData',
             fields : ['subsetId1', 'subsetName1', 'subset1', 'subsetId2', 'subsetName2', 'subset2', 'dataTypeId',
                 'dataTypeName', 'metadataExists']
         });
+        ret.proxy.addListener('loadexception', function(dummy, dummy2, response) {
+            if (response.status != 200) {
+                var responseText,
+                    parsedResponseText
+                responseText = response.responseText
+                try {
+                    parsedResponseText = JSON.parse(responseText)
+                    if (parsedResponseText.message) {
+                        responseText = parsedResponseText.message
+                    }
+                } catch (syntaxError) {}
+                exportListFetchErrorHandler(response.status, responseText);
+            }
+        });
+        return ret;
+    }
+
+    var exportListFetchErrorHandler = function(status, text) {
+        Ext.Msg.alert('Status', "Error fetching export metadata.<br/>Status " +
+                status + "<br/>Message: " + text);
     }
 
     // let's create export metadata json store
@@ -312,14 +333,14 @@ DataExport.prototype.createSelectBoxHtml = function (file, subset, dataTypeId, p
         outStr += file.dataFormat + ' is available for </br/>' + platform.gplTitle + ": " + platform.fileDataCount + ' patients';
         outStr += '<br/> Export (' + file.fileType + ')&nbsp;&nbsp;';
         outStr += '<input type="checkbox" name="SubsetDataTypeFileType"';
-        outStr += ' value="' + subset + '_' + dataTypeId + '_' + file.fileType + '_' + platform.gplId + '"';
+        outStr += ' value="{subset: ' + subset + ', dataTypeId: ' + dataTypeId + ', fileType: ' + file.fileType + ', gplId: ' + platform.gplId + '}"';
         outStr += ' id="' + subset + '_' + dataTypeId + '_' + file.fileType + '_' + platform.gplId + '"';
         outStr += ' /><br/><br/>';
     } else {
         outStr += file.dataFormat + ' is available for ' + file.fileDataCount + ' patients';
         outStr += '<br/> Export (' + file.fileType + ')&nbsp;&nbsp;';
         outStr += '<input type="checkbox" name="SubsetDataTypeFileType"';
-        outStr += ' value="' + subset + '_' + dataTypeId + '_' + file.fileType + '"';
+        outStr += ' value="{subset: ' + subset + ', dataTypeId: ' + dataTypeId + ', fileType: ' + file.fileType + '}"';
         outStr += ' id="' + subset + '_' + dataTypeId + '_' + file.fileType + '"';
         outStr += ' /><br/><br/>';
     }

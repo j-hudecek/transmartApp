@@ -1,45 +1,23 @@
-/*************************************************************************
- * tranSMART - translational medicine data mart
- *
- * Copyright 2008-2012 Janssen Research & Development, LLC.
- *
- * This product includes software developed at Janssen Research & Development, LLC.
- *
- * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License 
- * as published by the Free Software  * Foundation, either version 3 of the License, or (at your option) any later version, along with the following terms:
- * 1.	You may convey a work based on this program in accordance with section 5, provided that you retain the above notices.
- * 2.	You may convey verbatim copies of this program code as you receive it, in any medium, provided that you retain the above notices.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS    * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program.  If not, see http://www.gnu.org/licenses/.
- *
- *
- ******************************************************************/
-
 import command.SecureObjectAccessCommand
-import org.transmart.searchapp.AccessLog
-import org.transmart.searchapp.AuthUser;
-import org.transmart.searchapp.Principal;
-import org.transmart.searchapp.Role;
-import org.transmart.searchapp.SecureAccessLevel;
-import org.transmart.searchapp.SecureObject;
-import org.transmart.searchapp.SecureObjectAccess;
+import org.transmart.searchapp.*
 
 class SecureObjectAccessController {
 
+    def accessLogService
     def springSecurityService
 
 
     def index = {
-        redirect(action: list, params: params)
+        redirect(action: "list", params: params)
     }
 
     // the delete, save and update actions only accept POST requests
     def allowedMethods = [delete: 'POST', save: 'POST', update: 'POST']
 
     def list = {
-        if (!params.max) params.max = 10
+        if (!params.max) {
+            params.max = 10
+        }
         [secureObjectAccessInstanceList: SecureObjectAccess.list(params)]
     }
 
@@ -48,7 +26,7 @@ class SecureObjectAccessController {
 
         if (!secureObjectAccessInstance) {
             flash.message = "SecureObjectAccess not found with id ${params.id}"
-            redirect(action: list)
+            redirect(action: "list")
         } else {
             return [secureObjectAccessInstance: secureObjectAccessInstance]
         }
@@ -59,10 +37,10 @@ class SecureObjectAccessController {
         if (secureObjectAccessInstance) {
             secureObjectAccessInstance.delete()
             flash.message = "SecureObjectAccess ${params.id} deleted"
-            redirect(action: list)
+            redirect(action: "list")
         } else {
             flash.message = "SecureObjectAccess not found with id ${params.id}"
-            redirect(action: list)
+            redirect(action: "list")
         }
     }
 
@@ -71,7 +49,7 @@ class SecureObjectAccessController {
 
         if (!secureObjectAccessInstance) {
             flash.message = "SecureObjectAccess not found with id ${params.id}"
-            redirect(action: list)
+            redirect(action: "list")
         } else {
             return [secureObjectAccessInstance: secureObjectAccessInstance]
         }
@@ -83,13 +61,13 @@ class SecureObjectAccessController {
             secureObjectAccessInstance.properties = params
             if (!secureObjectAccessInstance.hasErrors() && secureObjectAccessInstance.save()) {
                 flash.message = "SecureObjectAccess ${params.id} updated"
-                redirect(action: show, id: secureObjectAccessInstance.id)
+                redirect(action: "show", id: secureObjectAccessInstance.id)
             } else {
                 render(view: 'edit', model: [secureObjectAccessInstance: secureObjectAccessInstance])
             }
         } else {
             flash.message = "SecureObjectAccess not found with id ${params.id}"
-            redirect(action: edit, id: params.id)
+            redirect(action: "edit", id: params.id)
         }
     }
 
@@ -103,7 +81,7 @@ class SecureObjectAccessController {
         def secureObjectAccessInstance = new SecureObjectAccess(params)
         if (!secureObjectAccessInstance.hasErrors() && secureObjectAccessInstance.save()) {
             flash.message = "SecureObjectAccess ${secureObjectAccessInstance.id} created"
-            redirect(action: show, id: secureObjectAccessInstance.id)
+            redirect(action: "show", id: secureObjectAccessInstance.id)
         } else {
             render(view: 'create', model: [secureObjectAccessInstance: secureObjectAccessInstance])
         }
@@ -125,12 +103,10 @@ class SecureObjectAccessController {
         if (accessid != null) {
             access = SecureAccessLevel.get(accessid);
         }
-
         def searchtext = params.searchtext;
         if (searchtext == null) {
             searchtext = ''
         }
-
         def secureObjectAccessList = getSecureObjAccessList(secureObjInstance, access)
         def userwithoutaccess = getPrincipalsWithoutAccess(secureObjInstance, access, searchtext)
 
@@ -139,10 +115,10 @@ class SecureObjectAccessController {
         log.debug("sec: $secureObjInstance")
 
         render(view: 'managePrincipalAccess', model: [
-                secureObjectInstance: secureObjInstance,
+                secureObjectInstance  : secureObjInstance,
                 secureObjectAccessList: secureObjectAccessList,
-                userwithoutaccess: userwithoutaccess,
-                accesslevelid: access.id
+                userwithoutaccess     : userwithoutaccess,
+                accesslevelid         : access?.id
         ])
     }
 
@@ -150,11 +126,12 @@ class SecureObjectAccessController {
 
         SecureObjectAccessCommand fl ->
             def secureObjInstance
-            def user = AuthUser.findByUsername(springSecurityService.getPrincipal().username)
+            def user = springSecurityService.getPrincipal()
             def msg = new StringBuilder(" Grant new access permission: ");
 
-            if (params.secureobjectid != null)
-                secureObjInstance = SecureObject.get(params.secureobjectid);
+            if (params.secureobjectid != null) {
+                secureObjInstance = SecureObject.get(params.secureobjectid)
+            };
             def access = SecureAccessLevel.findByAccessLevelName("VIEW");
             def accessid = params.accesslevelid
             if (accessid != null) {
@@ -167,31 +144,29 @@ class SecureObjectAccessController {
                 }]);
 
                 groupsToAdd.each { r ->
-                    //println(principalInstance);
-                    //	println(r)
-                    //	println(access)
                     addAccess(r, secureObjInstance, access);
-                    //println("Adding report:"+r.id);
                     msg.append("<User:").append(r.name).append(", Permission:").append(access.accessLevelName).append(", Study:").append(secureObjInstance.bioDataUniqueId).append(">");
                 };
             }
-
-            new AccessLog(username: user.username, event: "ADMIN", eventmessage: msg.toString(), accesstime: new Date()).save()
-
+            accessLogService.adminLog(user, msg.toString())
             def secureObjectAccessList = getSecureObjAccessList(secureObjInstance, access);
             def userwithoutaccess = getPrincipalsWithoutAccess(secureObjInstance, access, searchtext);
-            render(template: 'addremovePrincipal', model: [secureObjectAccessList: secureObjectAccessList, userwithoutaccess: userwithoutaccess])
-    }
 
+            render(template: 'addremovePrincipal', model: [
+                    secureObjectAccessList: secureObjectAccessList,
+                    userwithoutaccess     : userwithoutaccess
+            ])
+    }
     def removePrincipalFromAccessList = {
 
         SecureObjectAccessCommand fl ->
             def secureObjInstance
-            def user = AuthUser.findByUsername(springSecurityService.getPrincipal().username)
+            def user = springSecurityService.getPrincipal()
             def msg = new StringBuilder(" Revoke access permission: ");
 
-            if (params.secureobjectid != null)
-                secureObjInstance = SecureObject.get(params.secureobjectid);
+            if (params.secureobjectid != null) {
+                secureObjInstance = SecureObject.get(params.secureobjectid)
+            };
             def access = SecureAccessLevel.findByAccessLevelName("VIEW");
             def accessid = params.accesslevelid
             if (accessid != null) {
@@ -199,7 +174,7 @@ class SecureObjectAccessController {
             }
             def searchtext = params.searchtext;
             if (fl.groupstoremove != null) {
-                def groupsToRemove = SecureObjectAccess.findAll("from SecureObjectAccess r where r.id in (:p)",[p: fl.groupstoremove.collect {
+                def groupsToRemove = SecureObjectAccess.findAll("from SecureObjectAccess r where r.id in (:p)", [p: fl.groupstoremove.collect {
                     it.toLong()
                 }]);
 
@@ -210,14 +185,14 @@ class SecureObjectAccessController {
                 };
             }
 
-            new AccessLog(username: user.username, event: "ADMIN", eventmessage: msg.toString(), accesstime: new Date()).save()
+            accessLogService.adminLog(user, msg.toString())
 
             def secureObjectAccessList = getSecureObjAccessList(secureObjInstance, access);
             def userwithoutaccess = getPrincipalsWithoutAccess(secureObjInstance, access, searchtext);
 
             render(template: 'addremovePrincipal', model: [
                     secureObjectAccessList: secureObjectAccessList,
-                    userwithoutaccess: userwithoutaccess
+                    userwithoutaccess     : userwithoutaccess
             ])
     }
 
@@ -234,11 +209,12 @@ class SecureObjectAccessController {
         }
         def secureObjectAccessList = getSecureObjAccessListForPrincipal(principalInstance, access);
         def objectswithoutaccess = getObjsWithoutAccessForPrincipal(principalInstance, '');
-        render(view: 'manageAccess', model: [principalInstance: principalInstance,
-                accessLevelList: SecureAccessLevel.listOrderByAccessLevelValue(),
-                secureObjectAccessList: secureObjectAccessList,
-                objectswithoutaccess: objectswithoutaccess,
-                accesslevelid: access.id])
+
+        render(view: 'manageAccess', model: [principalInstance     : principalInstance,
+                                             accessLevelList       : SecureAccessLevel.listOrderByAccessLevelValue(),
+                                             secureObjectAccessList: secureObjectAccessList,
+                                             objectswithoutaccess  : objectswithoutaccess,
+                                             accesslevelid         : access?.id])
     }
 
     def accessLevelChange = {
@@ -260,21 +236,16 @@ class SecureObjectAccessController {
         }
 
         def searchtext = params.searchtext;
-        //println(searchtext)
         def secureObjectAccessList = getSecureObjAccessListForPrincipal(principalInstance, access);
         def objectswithoutaccess = getObjsWithoutAccessForPrincipal(principalInstance, searchtext);
-        if (secureObjectAccessList == null)
-            secureObjectAccessList = []
-        if (objectswithoutaccess == null)
-            objectswithoutaccess = []
-        render(template: 'addremoveAccess', model: [principalInstance: principalInstance,
-                secureObjectAccessList: secureObjectAccessList,
-                objectswithoutaccess: objectswithoutaccess,
-                accesslevelid: accesslevelid])
+        render(template: 'addremoveAccess', model: [principalInstance     : principalInstance,
+                                                    secureObjectAccessList: secureObjectAccessList,
+                                                    objectswithoutaccess  : objectswithoutaccess,
+                                                    accesslevelid         : accesslevelid])
     }
 
     def addSecObjectsToPrincipal = { SecureObjectAccessCommand fl ->
-        def user = AuthUser.findByUsername(springSecurityService.getPrincipal().username)
+        def user = springSecurityService.getPrincipal()
         def msg = new StringBuilder(" Grant new access permission: ");
 
         def principalInstance = Principal.get(params.currentprincipalid);
@@ -300,7 +271,7 @@ class SecureObjectAccessController {
 
     def removeSecObjectsFromPrincipal = { SecureObjectAccessCommand fl ->
 
-        def user = AuthUser.findByUsername(springSecurityService.getPrincipal().username)
+        def user = springSecurityService.getPrincipal()
         def msg = new StringBuilder(" Revoke access permission: ");
 
         def principalInstance = Principal.get(params.currentprincipalid);
@@ -328,19 +299,20 @@ class SecureObjectAccessController {
 
     def getObjsWithoutAccessForPrincipal(principal, insearchtext) {
         def searchtext = '%' + insearchtext.toString().toUpperCase() + '%'
-        //	println(searchtext)
-        if (principal != null)
-            return SecureObject.findAll(" FROM SecureObject s WHERE s.dataType='BIO_CLINICAL_TRIAL' AND s.id NOT IN(SELECT so.secureObject.id FROM SecureObjectAccess so WHERE so.principal =:p ) and upper(s.displayName) like :dn ORDER BY s.displayName ", [p: principal, dn: searchtext]);
-        else
-            return [];//SecureObject.findAll(" FROM SecureObject s WHERE 1=0);
+        if (principal != null) {
+            return SecureObject.findAll(" FROM SecureObject s WHERE s.dataType='BIO_CLINICAL_TRIAL' AND s.id NOT IN(SELECT so.secureObject.id FROM SecureObjectAccess so WHERE so.principal =:p ) and upper(s.displayName) like :dn ORDER BY s.displayName ", [p: principal, dn: searchtext])
+        } else {
+            return []
+        }; //SecureObject.findAll(" FROM SecureObject s WHERE 1=0);
 
     }
 
-    def getSecureObjAccessListForPrincipal(principal, access) {
-        if (principal != null)
+    private getSecureObjAccessListForPrincipal(principal, access) {
+        if (principal != null) {
             return SecureObjectAccess.findAll(" FROM SecureObjectAccess s WHERE s.principal =:p and s.accessLevel=:ac ORDER BY s.principal.name ", [p: principal, ac: access])
-        else
-            return [];//SecureObjectAccess.findAll(" FROM SecureObject s where 1=0");
+        } else {
+            return []
+        }
     }
 
     def addAccess(principal, secobject, access) {
@@ -375,34 +347,23 @@ class SecureObjectAccessController {
 
 
     def listAccessLevel = {
-        //log.debug(params);
-
-        //	log.debug(accessLevelList);
         render(template: 'accessLevelList', model: [accessLevelList: getAccessLevelList(params.id)]);
     }
 
 
     def getSecureObjAccessList(secureObj, access) {
-        if (secureObj == null)
+        if (secureObj == null) {
             return []
-
-        def all = SecureObjectAccess.findAll(" FROM SecureObjectAccess s WHERE s.secureObject = :so AND s.accessLevel = :al ORDER BY s.principal.name", [so: secureObj, al: access]);
-        if (all == null)
-            all = []
-        for (soa in all) {
-            soa.getObjectAccessName();
         }
-        return all;
+
+        return SecureObjectAccess.findAll(" FROM SecureObjectAccess s WHERE s.secureObject = :so AND s.accessLevel = :al ORDER BY s.principal.name", [so: secureObj, al: access]);
     }
 
     def getPrincipalsWithoutAccess(secureObj, access, insearchtext) {
-        if (secureObj == null)
+        if (secureObj == null) {
             return []
+        }
         def searchtext = '%' + insearchtext.toString().toUpperCase() + '%'
-
-        def all = Principal.findAll('from Principal g WHERE g.id NOT IN (SELECT so.principal.id from SecureObjectAccess so WHERE so.secureObject =:secObj AND so.accessLevel =:al ) AND upper(g.name) like :st ORDER BY g.name', [secObj: secureObj, al: access, st: searchtext]);
-        if (all == null)
-            all = []
-        return all;
+        return Principal.findAll('from Principal g WHERE g.id NOT IN (SELECT so.principal.id from SecureObjectAccess so WHERE so.secureObject =:secObj AND so.accessLevel =:al ) AND upper(g.name) like :st ORDER BY g.name', [secObj: secureObj, al: access, st: searchtext]);
     }
 }

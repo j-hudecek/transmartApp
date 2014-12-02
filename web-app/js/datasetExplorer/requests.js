@@ -1,22 +1,3 @@
-/*************************************************************************
- * tranSMART - translational medicine data mart
- * 
- * Copyright 2008-2012 Janssen Research & Development, LLC.
- * 
- * This product includes software developed at Janssen Research & Development, LLC.
- * 
- * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License 
- * as published by the Free Software  * Foundation, either version 3 of the License, or (at your option) any later version, along with the following terms:
- * 1.	You may convey a work based on this program in accordance with section 5, provided that you retain the above notices.
- * 2.	You may convey verbatim copies of this program code as you receive it, in any medium, provided that you retain the above notices.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS    * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License along with this program.  If not, see http://www.gnu.org/licenses/.
- * 
- *
- ******************************************************************/
-  
 
 function getDateTime()
 {
@@ -136,7 +117,7 @@ function getONTRequestFooter(){ return "</message_body>\
                    }
 
 function getCategories()
-{
+{  
     jQuery.ajax(pageInfo.basePath + '/concepts/getCategories', {
             dataType : 'json'
         })
@@ -220,7 +201,7 @@ function getCRCQueryRequest(subset, queryname)
 {
     if (queryname == "" || queryname == undefined) {
         var d = new Date();
-        queryname = GLOBAL.Username+"'s Query at "+ d.toString();
+        queryname = GLOBAL.Username+"'s Query at "+ d.toUTCString();
     }
 
     var query =
@@ -234,7 +215,7 @@ function getCRCQueryRequest(subset, queryname)
             query = query + getCRCRequestPanel(qcd.dom, i);
         }
     }
-    query = query + getSecurityPanel() + "</ns4:query_definition>";
+    query = query + "</ns4:query_definition>";
 
     return query;
 }
@@ -403,6 +384,28 @@ var request=getCRCpdoRequestHeader()+
      request=request+getCRCpdoRequestFooter();
      return request;
   }
+         
+ function getPreviousQueries()
+{  
+     var getPreviousQueriesRequest=getCRCRequestHeader()+'<user login="'+GLOBAL.Username+'">'+GLOBAL.Username+'</user>\
+            <patient_set_limit>0</patient_set_limit>\
+            <estimated_time>0</estimated_time>\
+            <request_type>CRC_QRY_getQueryMasterList_fromUserId</request_type>\
+        </ns4:psmheader>\
+        <ns4:request xsi:type="ns4:user_requestType" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\
+            <user_id>'+GLOBAL.Username+'</user_id>\
+            <group_id>'+GLOBAL.ProjectID+'</group_id>\
+            <fetch_size>20</fetch_size>'+getCRCRequestFooter(); 
+ 	
+ 	Ext.Ajax.request(
+    	    {
+    	        url: pageInfo.basePath+"/proxy?url="+GLOBAL.CRCUrl+"request",
+    	        method: 'POST',
+    	        xmlData: getPreviousQueriesRequest,                                        
+    	        success: function(result, request){getPreviousQueriesComplete(result);},
+    	        failure: function(result, request){getPreviousQueriesComplete(result);}
+    	    }); 
+}
 
 function getPreviousQueryFromID(subset, queryMasterID) {
     queryPanel.el.mask('Rebuilding query...', 'x-mask-loading');
@@ -422,25 +425,64 @@ function getPreviousQueryFromID(subset, queryMasterID) {
         });
 }
 
+function getQueryInstanceList(queryName, queryMasterId)
+{  
+     var getQueryInstanceListRequest=getCRCRequestHeader()+'<user login="'+GLOBAL.Username+'">'+GLOBAL.Username+'</user>\
+            <patient_set_limit>0</patient_set_limit>\
+            <estimated_time>0</estimated_time>\
+            <request_type>CRC_QRY_getQueryInstanceList_fromQueryMasterId</request_type>\
+        </ns4:psmheader>\
+        <ns4:request xsi:type="ns4:master_requestType" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\
+             <query_master_id>'+queryMasterId+'</query_master_id>'+getCRCRequestFooter(); 
+ 	
+ 	Ext.Ajax.request(
+    	    {
+    	        url: pageInfo.basePath+"/proxy?url="+GLOBAL.CRCUrl+"request",
+    	        method: 'POST',
+    	        scope: this,
+    	        xmlData: getQueryInstanceListRequest,                                        
+    	        success: function(result, request){getQueryInstanceListComplete(result, queryName);},
+    	        failure: function(result, request){getQueryIntanceListComplete(result);}
+    	    }); 
+}
 
-function getSecurityPanel() {
-//      Commenting this out while investigating for the right parameters
-//		if(!GLOBAL.IsAdmin)
-		if(false)
-		{
-		 return"<panel><panel_number>21</panel_number> \
-               <invert>0</invert><total_item_occurrences>1</total_item_occurrences>\
-   			   <item>\
-					<item_key>\\\\Public Studies\\Public Studies\\SECURITY\\</item_key>\
-					<class>ENC</class>\
-					<constrain_by_value>\
-					<value_operator>IN</value_operator>\
-					<value_constraint>("+GLOBAL.Tokens+")</value_constraint>\
-					<value_unit_of_measure>unit</value_unit_of_measure>\
-					<value_type>TEXT</value_type>\
-					</constrain_by_value>\
-					</item>\
-  				</panel>";
-  		}
-  		else return ""; //no security panel
-  		}
+function getQueryInstanceListComplete(response, queryName)
+{
+var queryInstances=response.responseXML.selectNodes('//query_instance');
+//get the first instance of the query
+var firstQueryInstanceId=queryInstances[0].selectSingleNode('query_master_id').firstChild.nodeValue;
+//alert(firstQueryInstanceId);
+//get the results of the first instance
+getQueryResultInstanceList(firstQueryInstanceId, queryName);
+}
+
+function getQueryResultInstanceList(queryInstanceId, queryName)
+{  
+     var getQueryResultInstanceListRequest=getCRCRequestHeader()+'<user login="'+GLOBAL.Username+'">'+GLOBAL.Username+'</user>\
+            <patient_set_limit>0</patient_set_limit>\
+            <estimated_time>0</estimated_time>\
+            <request_type>CRC_QRY_getQueryResultInstanceList_fromQueryInstanceId</request_type>\
+        </ns4:psmheader>\
+        <ns4:request xsi:type="ns4:instance_requestType" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\
+             <query_instance_id>'+queryInstanceId+'</query_instance_id>'+getCRCRequestFooter(); 
+ 	
+ 	Ext.Ajax.request(
+    	    {
+    	        url: pageInfo.basePath+"/proxy?url="+GLOBAL.CRCUrl+"request",
+    	        method: 'POST',
+    	        scope: this,
+    	        headers:{'Content-Type':'text/xml'},
+    	        xmlData: getQueryResultInstanceListRequest,                                        
+    	        success: function(result, request){getQueryResultInstanceListComplete(result, queryName);},
+    	        failure: function(result, request){getQueryResultInstanceListComplete(result);}
+    	    }); 
+}
+
+function getQueryResultInstanceListComplete(response, queryName)
+{
+var queryResultInstances=response.responseXML.selectNodes('//query_result_instance');
+//get the first instance of the query
+var firstResultInstanceId=queryResultInstances[0].selectSingleNode('result_instance_id').firstChild.nodeValue;
+//alert(firstResultInstanceId);
+createExportItem(queryName, firstResultInstanceId);
+}

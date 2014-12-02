@@ -1,40 +1,8 @@
-////////////////////////////////////////////////////////////////////
-// Globals
-var activeCategories = new Array();   // array of category objects that are in active filter; order is order that arrays appear on screen
-var activeKeywords = new Array();     // array of keyword objects that are in active filter;  order is order that they appear on screen within their category
-var uniqueIdSequence = 0;             // sequence to uniquely identify keywords in a keyword object
-
-// Store the nodes that were selected before a new node was selected, so that we can compare to the nodes that are selected after.  Selecting
-//  one node in the tree can cause lots of changes in other parts of the tree (copies of this node change, children/parents change, 
-//  parents of parents, children of parents of parent, etc.)
-var nodesBeforeSelect = new Array();
-
-// By default, allow the onSelect event to trigger for the tree nodes;  However, we don't want select events that are triggered from inside the onSelect
-// event to cause the onSelectEvent code to keep triggering itself.  So change this to false before any call to select() within the onSelect (the event
-// will still fire but is stopped immediately); and set this flag back to true at the end of the event so it can be triggered again.  
-var allowOnSelectEvent = true;
-
 // store probe Ids for each analysis that has been loaded
 var analysisProbeIds = new Array();
 
-//store probe Ids for each analysis that has been loaded on XT for selected analyses
-var analysisProbeIdsSA = new Array();
-
 var openAnalyses = new Array(); //store the IDs of the analyses that are open
 
-var openTrials = new Array(); //store the trials that are currently expanded
-
-//cross trial analysis selected analyses
-var selectedAnalyses = [];
-
-//cross trial analysis selected keywords
-var xtSelectedKeywords = [];
-
-var uniqueGeneChartId = 0;   // sequence to give unique identifiers to the tooltips used in the gene chart
-var gcTooltips = new Array;  // gene chart tooltips
-
-var xtSelectionUpdated = false; //Used to detect when analyses have been added/removed from the selectedAnalysis list
-								//when set to true, the Cross Trial Analysis page will update when the tab is clicked
 
 //create an ajaxmanager named rwgAJAXManager
 //this will handle all ajax calls on this page and prevent too many 
@@ -46,293 +14,198 @@ var rwgAJAXManager = jQuery.manageAjax.create('rwgAJAXManager', {
 });
 
 var cohortBGColors = new Array(
+		/*
+		"#F5A9E1",  // light pink
+		"#00FFFF",  // light blue
+		"#FE9A2E",  // light orange
+		"#BDBDBD",  // light grey
+		"#2EFE2E",  // light green
+		"#FF00FF",   // pink
+		"#F3F781"  // light yellow
+	*/
+		
 		/* Pastel */
 		"#FFFFD9", //light yellow
 		"#80B1D3", //light blue
 		"#B3DE69", //moss green
 		"#D9D9D9", //grey
 		"#BC80BD", //lavender
-		"#91d4c5"  //teal		
+		"#91d4c5"  //teal
+
+		
+		/*Light yellow to green, sequential 
+		"#FFFFE5",
+		"#F7FCB9",
+		"#D9F0A3",
+		"#ADDD8E",
+		"#78C679",
+		"#41AB5D",
+		"#238443",
+		"#006837"
+		*/
+		
 );
 
 
-function removeSelectedAnalysis(analysisID){
-	
-	jQuery("#li_SelectedAnalysis_"+analysisID).fadeOut('fast');
-	
-
-	//remove from selecatedAnalyses array
-	removeXTAnalysisFromArray(analysisID);
-	
-	var currentCount = selectedAnalyses.length;
-	
-	var newLabel = "(" +currentCount + ")";
-	jQuery("#analysisCountLabel").html(newLabel);
-
-	jQuery("input[name=chbx_Analysis_"+analysisID+"]").attr('checked', false);
-	
-	displayxtAnalysesList();
-	
-}
-
-//When the user adds or removes an analyses from the Selected Analyses list,
-//we need to check if there are summary stats or heatmaps already display
-//If so, give option to refresh or clear the view
-function refreshCrossTrialMsg(){
-	
-	//if there are already selected keywords, then these need
-	//to be refreshed or removed
-//	if(xtSelectedKeywords.length>0){
-		
-		//Display msg to user with option to refresh or clear
-		jQuery("#xtMsgBox").fadeIn();
-		
-		//mask the tabs
-		jQuery('#xtMenuBar').mask();
-		
-//	}
-	
-}
-
-
-//remove the the XT Analysis from array selectedAnalyses
-function removeXTAnalysisFromArray(analysisID){
-	
-	xtSelectionUpdated = true; //set to true to indicate the selected analyses have changed
-	
-	for (var i =0; i < selectedAnalyses.length; i++)
-		   if (selectedAnalyses[i].id === analysisID) {
-			   selectedAnalyses.splice(i,1);
-		      break;
-		   }
-
-	//update the cookie
-	jQuery.cookie('selectedAnalyses', JSON.stringify(selectedAnalyses));
-	
-	//check if the cross-trial div is currently displayed. If so, display either prompt to refresh page (if any analyses
-	//   in array, or clear out everything if none are selected)
-	if(jQuery('#cross-trial-div').css('display') != 'none'){
-		if (selectedAnalyses.length == 0)  {
-			clearAllSelectedAnalyses();
-		}
-		else  {
-			refreshCrossTrialMsg();
-		}
-	}
-	
-	return;
-	
-}
-
-function addXTAnalysisToArray(analysisID, analysisTitle, studyID){
-	
-	//set this global veriable to true so that the CTA page refreshes when viewed
-	xtSelectionUpdated = true;
-	
-	//add item to selectedAnalyses array
-	selectedAnalyses.push({'id':analysisID, 'title':analysisTitle, 'studyID':studyID});
-	
-	selectedAnalyses.sort(analysesSort());	
-	
-	//update the cookie
-	jQuery.cookie('selectedAnalyses', JSON.stringify(selectedAnalyses));
-	
-	return;
-}
-
-
-function updateAnalysisCount(checkedState, analysisID, analysisTitle, studyID)	{	
-	
-	xtSelectionUpdated = true; //set global status to true to indicate the selection has changed
-
-	var currentCount = selectedAnalyses.length;
-	
+////////////////////////////////////////////////////////////////////
+// Not in the July 2012 Release
+////////////////////////////////////////////////////////////////////
+/*function updateAnalysisCount(checkedState)	{	
+	var currentCount = jQuery("#analysisCount").val();
 	if (checkedState)	{
 		currentCount++;
-		
-		//Add analysis to array
-		addXTAnalysisToArray(analysisID, analysisTitle, studyID);
-		
 	} else	{
 		currentCount--;
-		
-		//remove from selecatedAnalyses array
-		removeXTAnalysisFromArray(analysisID);
 	}
-	
-	var newLabel = "(" +currentCount + ")";
-
+	jQuery("#analysisCount").val(currentCount);
+	var newLabel = currentCount + " Analyses Selected";
+	if (currentCount == 0)	{
+		newLabel = "No Analysis Selected";
+	} else if (currentCount == 1)	{
+		newLabel = "1 Analysis Selected";
+	}
 	jQuery("#analysisCountLabel").html(newLabel);
-	
-	
-	return;
+	return false;
+}
+*/
+////////////////////////////////////////////////////////////////////
+function showDetailDialog(folderId)	{
+
+	jQuery('#welcome-viewer').empty();
+
+	jQuery('#metadata-viewer').empty().addClass('ajaxloading');
+	jQuery('#metadata-viewer').load(folderDetailsURL + '?id=' + folderId, {}, function() {
+		jQuery('#metadata-viewer').removeClass('ajaxloading');
+	});
+	return false;
 }
 
-//this function used in the toolbar to display the selected list
-function getSelectedAnalysesList(){
-	
-	jQuery("#selectedAnalysesExpanded").toggle();
-	
-	var html = "";
-	
-	if(selectedAnalyses.length==0){
+//when a new object is created, show its details, highlight it and check for its parent to add expand/collapse image
+function updateForNewFolder(folderId)	{
+	jQuery('#metadata-viewer').load(folderDetailsURL + '?id=' + folderId, {}, function() {
+		var parentId=jQuery('#parentId').val();
 		
-		html = "<div style='text-align:center; padding:4px;'><p>No analyses are selected</p></div>"
+		//update parent folder
+		var imgExpand = "#imgExpand_"  + parentId;
+		var src = jQuery(imgExpand).attr('src').replace('folderplus.png', 'ajax-loader-flat.gif').replace('folderminus.png', 'ajax-loader-flat.gif').replace('folderleaf.png', 'ajax-loader-flat.gif');
+		jQuery(imgExpand).attr('src',src);
 		
-	}else{
-	
-		html += "<a href='#' onclick='clearAllSelectedAnalyses()'>Clear All</a><br />";
-		html +="<ul id='selectedAnalysesList'>";
-		
-		jQuery(selectedAnalyses).each(function(index, value){
-	
-			html = html + "<li id='li_SelectedAnalysis_"+selectedAnalyses[index].id +"'>"
-			html = html + "<input type='checkbox' onchange=removeSelectedAnalysis('"+selectedAnalyses[index].id +"') name='chbx_SelectedAnalysis_" + selectedAnalyses[index].id +"' checked='	checked'>";
-			html = html + "<span class='result-trial-name'>"+ selectedAnalyses[index].studyID +'</span>: ' +selectedAnalyses[index].title.replace(/_/g, ', ') +'</li>';
-			
+		jQuery.ajax({
+			url:folderContentsURL,
+			data: {id: parentId, auto: false},
+			success: function(response) {
+				jQuery('#' + parentId + '_detail').html(response).addClass('gtb1').addClass('analysesopen').attr('data', true);
+				
+				//check if the object has children
+				if(jQuery('#' + parentId + '_detail .search-results-table .folderheader').size() > 0){
+					jQuery(imgExpand).attr('src', jQuery(imgExpand).attr('src').replace('ajax-loader-flat.gif', 'folderminus.png'));
+				}else{
+					jQuery(imgExpand).attr('src', jQuery(imgExpand).attr('src').replace('ajax-loader-flat.gif', 'folderleaf.png'));
+				}
+				jQuery('.result-folder-name').removeClass('selected');
+				jQuery('#result-folder-name-' + folderId).addClass('selected');
+			},
+			error: function(xhr) {
+				console.log('Error!  Status = ' + xhr.status + xhr.statusText);
+			}
 		});
 		
-		html = html + '</ul>';
-	}
+		var imgExpand = "#imgExpand_"  + parentId;
+		var src = jQuery(imgExpand).attr('src').replace('folderplus.png', 'folderminus.png').replace('ajax-loader-flat.gif', 'folderminus.png').replace('folderleaf.png', 'folderminus.png');
+		jQuery(imgExpand).attr('src',src);
+		var action="toggleDetailDiv('"+parentId+"', folderContentsURL + '?id="+parentId+"&auto=false');";
+		jQuery('#toggleDetail_'+parentId).attr('onclick', action);
+		openFolderAndShowChild(parentId, folderId);
+		jQuery('.result-folder-name').removeClass('selected');
+		jQuery('#result-folder-name-' + folderId).addClass('selected');
+	});
 	
-	jQuery('#selectedAnalysesExpanded').html(html);
-	
+	return false;
+}
+
+function openFolderAndShowChild(parent, child) {
+	toggleDetailDiv(parent, folderContentsURL + '?id=' + parent + '&auto=false', true, child);
+	showDetailDialog(child);
 }
 
 
-
-function clearAllSelectedAnalyses(){
-	
-	for (var i =0; i < selectedAnalyses.length; i++){
-		jQuery("input[name=chbx_Analysis_"+selectedAnalyses[i].id+"]").attr('checked', false);		
-	}
-	
-	jQuery('#selectedAnalysesExpanded').html("");
-	jQuery("#analysisCountLabel").html("(0)");
-	
-	selectedAnalyses =[];
-	
-	//update cookie
-	jQuery.cookie('selectedAnalyses', JSON.stringify(selectedAnalyses));
-	
-	//Hide menu
-	jQuery("#selectedAnalysesExpanded").hide();
-	
-	//update the display list
-	displayxtAnalysesList();
-	
-	//also clear the search terms
-	clearAllXTSearchTerms();	
-	
-	
-	//hide the elements on the main page
-	  jQuery('#xtAnalysisList').hide();
-	  jQuery('#xtMenuBar').hide();
-	  jQuery('#xtSearch-ac').prop('disabled', true);
-	  
-	  jQuery('#xtNoAnalysesMsg').show();
-
-	return;
-	
-}
-
-//set the checkbox of the analysis to checked if it exists in the selectedAnalysis array
-function setAnalysisCheckboxState(analysisID){
-	
-	//check the selectedAnalyses array for the current analysisID
-	var selected = selectedAnalyses.filter(function (analysis){
-			return analysis.id == analysisID;
-		});
-	
-	//if the analysis was found, check the checkbox
-	if(selected.length>0){
-		jQuery("input[name=chbx_Analysis_"+analysisID+"]").attr('checked', true);
-	}
-
-	
-}
-
-//Used for sorting arrays of objects 
-function dynamicSort(property) {
-    return function (a,b) {
-        return (a[property] < b[property]) ? -1 : (a[property] > b[property]) ? 1 : 0;
-    }
-}
-
-//Used for sorting analyses array 
-function analysesSort() {
-    return function (a,b) {
-    	var valA = a["studyID"] + ":" + a["id"];
-    	var valB = b["studyID"] + ":" + b["id"];
-    	    	
-        return (valA < valB) ? -1 : (valA > valB) ? 1 : 0;
-    }
-}
-
-
-function showDetailDialog(dataURL, dialogTitle, dialogHeight)	{
-	var height = 'auto';
-	if (typeof dialogHeight == 'number')	{
-		height = dialogHeight;
-	}	
-	//dialogTitle += ' --Esc key to close--'; -- removed this to provide more space in title bar
-	var dialogDetail = document.getElementById(dialogTitle);
-	if (dialogDetail == null)	{
-		jQuery('<div id="' + dialogTitle + '"></div>')
-			.load(dataURL)
-			.dialog({
-				autoOpen: false,
-				title: dialogTitle,
-				height: height,
-				width: 550,
-				position: ['center', 'center']
-			})
-			.dialog('open');
-	} else	{
-		jQuery(dialogDetail).dialog('isOpen') ? jQuery(dialogDetail).dialog('close') : jQuery(dialogDetail).dialog('open');		
-	}
+function showOverlay(overlayDiv, dataURL)	
+{
+	jQuery(overlayDiv).empty()
+	jQuery(overlayDiv).load(dataURL)	
+	jQuery('#sidebar-accordion').accordion("option", "active", 1);	
 	return false;
 }
 
 // Open and close the analysis for a given trial
-function toggleDetailDiv(trialNumber, dataURL, trialID)	{	
+function toggleDetailDiv(trialNumber, dataURL, forceOpen, highlightFolder, manual)	{	
+	if(manual==undefined){ manual=false;}
 	var imgExpand = "#imgExpand_"  + trialNumber;
 	var trialDetail = "#" + trialNumber + "_detail";
 	
 	// If data attribute is undefined then this is the first time opening the div, load the analysis... 
 	if (typeof jQuery(trialDetail).attr('data') == 'undefined')	{
-		
-		openTrials.push(trialNumber); //add the trial to the openTrials array
-		
-		//display loading message
-		jQuery('#TrialDet_'+ trialID +'_anchor').mask("Loading...");
-		
-		var src = jQuery(imgExpand).attr('src').replace('down_arrow_small2.png', 'up_arrow_small2.png');	
+		//add node
+		if(manual){
+			jQuery.ajax({
+				url:addNodeRwgURL+"?node=FOL:"+trialNumber
+			});
+		}
+		var src = jQuery(imgExpand).attr('src').replace('folderplus.png', 'ajax-loader-flat.gif');	
 		jQuery(imgExpand).attr('src',src);
-		jQuery.ajax({	
+		jQuery.ajax({
 			url:dataURL,			
 			success: function(response) {
+				jQuery(imgExpand).attr('src', jQuery(imgExpand).attr('src').replace('ajax-loader-flat.gif', 'folderminus.png'));
 				jQuery(trialDetail).addClass("gtb1");
-				jQuery(trialDetail).html(response);			    
-				jQuery(trialDetail).attr('data', true);							// Add an attribute that we will use as a flag so we don't need to load the data multiple times
-				jQuery('#TrialDet_'+ trialID +'_anchor').unmask();
+				jQuery(trialDetail).html(response);
+				jQuery(trialDetail).addClass("analysesopen");
+				jQuery(trialDetail).attr('data', true);// Add an attribute that we will use as a flag so we don't need to load the data multiple times
+				
+				//If we have a folder to highlight, transfer the highlight to it
+				if (highlightFolder) {
+			    	jQuery('.result-folder-name').removeClass('selected');
+					jQuery('#result-folder-name-' + highlightFolder).addClass('selected');
+				}
 			},
 			error: function(xhr) {
 				console.log('Error!  Status = ' + xhr.status + xhr.statusText);
 			}
 		});
 	} else	{
-		var src = jQuery(imgExpand).attr('src').replace('up_arrow_small2.png', 'down_arrow_small2.png');
-		if (jQuery(trialDetail).attr('data') == "true")	{
+		var src = jQuery(imgExpand).attr('src').replace('folderminus.png', 'folderplus.png');
+		if (jQuery(trialDetail).attr('data') == "true" && !forceOpen)	{
+			//remove node
+			if(manual){
+				jQuery.ajax({
+					url:removeNodeRwgURL+"?node=FOL:"+trialNumber
+				});
+			}
+			
 			jQuery(trialDetail).attr('data',false);
-			removeByValue(openTrials,trialNumber);//remove the trial to the openTrials array
+			jQuery(trialDetail).removeClass("analysesopen");
 		} else	{
-			src = jQuery(imgExpand).attr('src').replace('down_arrow_small2.png', 'up_arrow_small2.png');
+			if(manual){
+				jQuery.ajax({
+					url:addNodeRwgURL+"?node=FOL:"+trialNumber
+				});
+			}
+			src = jQuery(imgExpand).attr('src').replace('folderplus.png', 'folderminus.png');
 			jQuery(trialDetail).attr('data',true);
-			openTrials.push(trialNumber); //add the trial to the openTrials array
+			jQuery(trialDetail).addClass("analysesopen");
+			
+			if (highlightFolder) {
+				jQuery('.result-folder-name').removeClass('selected');
+				jQuery('#result-folder-name-' + highlightFolder).addClass('selected');
+			}
 		}	
 		jQuery(imgExpand).attr('src',src);
-		jQuery(trialDetail).toggle();		
+		if (!forceOpen) {
+			jQuery(trialDetail).toggle();
+		}
+		else {
+			jQuery(trialDetail).show();
+		}
 	}
 	return false;
 }
@@ -357,8 +230,7 @@ function switchImage(imgToRemove, imgToAdd)	{
 
 // Method to show/hide the search/filters 
 function toggleFilters()	{
-	if (jQuery("#main").css('left') == "0px"){	
-		
+	if (jQuery("#main").css('left') == "0px"){		
 		jQuery("#search-categories").attr('style', 'visibility:visible; display:inline');
 		jQuery("#search-ac").attr('style', 'visibility:visible; display:inline');
 		jQuery("#search-div").attr('style', 'visibility:visible; display:inline');
@@ -366,13 +238,12 @@ function toggleFilters()	{
 		jQuery("#title-search-div").attr('style', 'visibility:visible; display:inline');
 		jQuery("#title-filter").attr('style', 'visibility:visible; display:inline');
 		jQuery("#side-scroll").attr('style', 'visibility:visible; display:inline');
-
+		jQuery("#main").css('left', 300);
 		jQuery("#toggle-btn").css('left', 278);
 		jQuery("#toggle-btn").css('height;', 20);
-		jQuery("#toggle-btn").css('height', 20);
 		jQuery("#main").css('padding-left', 0);	
-		jQuery("#main").css('left', 300);
-		jQuery("#menu_bar").css('left', 301);
+		jQuery("#menu_bar").css('margin-left', -1);
+		jQuery("#toggle-btn").css('height', 20);	
 	} else	{
 		jQuery("#search-categories").attr('style', 'visibility:hidden; display:none');
 		jQuery("#search-ac").attr('style', 'visibility:hidden; display:none');
@@ -381,71 +252,17 @@ function toggleFilters()	{
 		jQuery("#title-search-div").attr('style', 'visibility:hidden; display:none');
 		jQuery("#title-filter").attr('style', 'visibility:hidden; display:none');
 		jQuery("#side-scroll").attr('style', 'visibility:hidden; display:none');
-		
-		jQuery("#toggle-btn").css('height', '100%');	
-		jQuery("#main").css('padding-left', 20);	
 		jQuery("#main").css('left', 0);	
 		jQuery("#toggle-btn").css('left', 0);	
-		jQuery("#menu_bar").css('left', 0);	
-
+		jQuery("#toggle-btn").css('height', '100%');	
+		jQuery("#main").css('padding-left', 20);	
+		jQuery("#menu_bar").css('margin-left', -21);	
 	}	   
 }
 
-// Method to add the categories for the select box
-function addSelectCategories()	{
-	jQuery("#search-categories").append(jQuery("<option></option>").attr("value", "ALL").text("All"));
-	jQuery.getJSON(getCategoriesURL, function(json) {
-		for (var i=0; i<json.length; i++)	{
-			var category = json[i].category;
-			var catText = convertCategory(category);
-			jQuery("#search-categories").append(jQuery("<option></option>").attr("value", category).text(catText));
-		}
-    });
-}
-
-// Helper method to only capitalize the first letter of each word
-function convertCategory(valueToConvert)	{
-	var convertedValue = valueToConvert.toLowerCase();
-	return convertedValue.slice(0,1).toUpperCase() + convertedValue.slice(1);
-}
-
-// Method to add the autocomplete for the search keywords
-function addSearchAutoComplete()	{
-	jQuery("#search-ac").autocomplete({
-		source: sourceURL,
-		minLength:0,
-		select: function(event, ui) {  
-			searchParam={id:ui.item.id,categoryDisplay:ui.item.category,keyword:ui.item.label,categoryId:ui.item.categoryId, categorySOLR:ui.item.categoryId.toString().replace(/ /g,'_')};
-			addSearchTerm(searchParam);
-			return false;
-		}
-	}).data("autocomplete")._renderItem = function( ul, item ) {
-		return jQuery('<li></li>')		
-		  .data("item.autocomplete", item )
-		  .append('<a><span class="category-' + item.category.toLowerCase() + '">' + item.category + '&gt;</span>&nbsp;<b>' + item.label + '</b>&nbsp;' + item.synonyms + '</a>')
-		  .appendTo(ul);
-	};	
-		
-	// Add an onchange event to the select so we can set the category in the URL for the autocomplete
-	var categorySelect = document.getElementById("search-categories"); 
-	categorySelect.onchange=function()	{
-		jQuery('#search-ac').autocomplete('option', 'source', sourceURL + "?category=" + this.options[this.selectedIndex].value);
-	};
-		
-	// Capture the enter key on the slider and fire off the search event on the autocomplete
-	jQuery("#search-categories").keypress(function(event)	{
-		if (event.which == 13)	{
-			jQuery("#search-ac").autocomplete('search');
-		}
-	});	
-	return false;
-}
-
-
-
 function showIEWarningMsg(){
 	
-	if (jQuery.browser.msie && jQuery.browser.version<9) {
+	if (jQuery.browser.msie && jQuery.browser.version.substr(0,1)<9) {
 
 		var msg = "<div id='IEwarningBox'>Your browser is not supported. Please use the latest version of Chrome. <br /><br />";
 			msg = msg + "<a href='#' id='IEwarningOverlayLink'>More info</a> | <a href='#' onclick=\"javascript:jQuery('#IEwarningBox').slideUp('fast');\">Close</a> </div>";
@@ -455,7 +272,7 @@ function showIEWarningMsg(){
 			overlayMsg = overlayMsg + "for software package #C01026EE. If you have questions, please email us at <a href='mailto:tranSMART@its.jnj.com'>tranSMART@jnj.com</a>.</p>";
 			overlayMsg = overlayMsg + "<br /><p><a href='#' onclick=\"jQuery('#IEwarningOverlayLink').colorbox.close()\">Close</a></p></div>";
 				
-		jQuery('#menu_bar').after(msg);
+		jQuery('#results-div').before(msg);
 		
 		jQuery("#IEwarningOverlayLink").colorbox({html:overlayMsg, width:"50%", height:"300px", opacity:"0.75"});
 		
@@ -464,345 +281,22 @@ function showIEWarningMsg(){
 	
 }
 
-
-	
-// Method to load the search results in the search results panel and facet counts into tree
-// This occurs whenever a user add/removes a search term
-function showSearchResults(initialLoad)	{
-
-	// clear stored probe Ids for each analysis
-	analysisProbeIds = new Array();  
-	
-	// clear stored analysis results
-	jQuery('body').removeData();	
-	
-	// call method which retrieves facet counts and search results
-	showFacetResults(initialLoad);
-	
-	//all trials/analyses will be closed when doing a new search, so clear this array
-	openAnalyses = [];
-	openTrials = [];
-	
-}
-
-// update a node's count (not including children)
-function updateNodeIndividualFacetCount(node, count) {
-	// only add facet counts if not a category 
-	if (!node.data.isCategory)   {
-		// if count is passed in as -1, reset the facet count to the initial facet count
-		if (count > -1)  {
-	        node.data.facetCount = count;
-	    }
-	    else  {
-	    	node.data.facetCount = node.data.initialFacetCount
-	    }
-	    node.data.title = node.data.termName + " (" + node.data.facetCount + ")";	
-	}
-	else  {
-	    node.data.facetCount = -1;
-	    node.data.title = node.data.termName;	
-	}
-	
-}
-
-
-//Method to clear the facet results in the search tree
-function clearFacetResults()	{
-	
-	var tree = jQuery("#filter-div").dynatree("getTree");
-	
-	// clear counts from tree
-	tree.visit(  function(node) {
-		           if (!node.data.isCategory)  {
-		        	   updateNodeIndividualFacetCount(node, -1);   		        	    
-		           }
-		           
-	             }
-                 , false
-               );
-		
-	 // redraw entire tree after counts updated
-	 tree.redraw();
-}
-
-
-//Method to load the facet results in the search tree and populate search results panel
-function showFacetResults(initialLoad)	{
-	
-	var savedKeywords;
-
-    // save the search terms into a copy of the array -- we'll use this to check at the end to make sure the filters haven't changed since we originally 
-	//  submitted Ajax request to get results
-	if (activeKeywords.length == 0)  {
-			savedKeywords = new Array();
-	}
-	else {
-		// JNJ-2456, copy the original array to create the saved array 
-		savedKeywords = activeKeywords.slice(0);
-	}
-
-	// Generate list of categories/terms to send to facet search
-	// create a string to send into the facet search, in form Cat1:Term1,Term2&Cat2:Term3,Term4,Term5&...
-
-	var facetSearch = new Array();   // will be an array of strings "Cat1:Term1|Term2", "Cat2:Term3", ...   
-	var categories = new Array();    // will be an array of categories "Cat1","Cat2"
-	var terms = new Array();         // will be an array of strings "Term1|Term2", "Term3"
-
-	// first, loop through each term and add categories and terms to respective arrays 		
-    for (var i=0; i<savedKeywords.length; i++)	{
-		var keywordId = savedKeywords[i].keywordId; 
-		var categoryId = savedKeywords[i].categorySOLR; 
-		
-		var categoryIndex = categories.indexOf(categoryId);
-
-		// if category not in array yet, add category and term to their respective array, else just append term to proper spot in its array
-		if (categoryIndex == -1)  {
-		    categories.push(categoryId);
-		    terms.push(keywordId);
-		}
-		else  {
-		    terms[categoryIndex] = terms[categoryIndex] + "|" + keywordId; 			
+//Add the search term to the array that the user has added to filter tree.
+function addFilterTreeSearchTerm(searchTerm)	{
+	var category = searchTerm.display == undefined ? "TEXT" : searchTerm.display;
+	var text = searchTerm.keyword == undefined ? searchTerm : searchTerm.keyword;
+	var id = searchTerm.id == undefined ? -1 : searchTerm.id;
+	var key = category + ":" + text + ":" + id;
+	if (currentSearchTerms.indexOf(key) < 0)	{
+		currentSearchTerms.push(key);
+		if (currentCategories.indexOf(category) < 0)	{
+			currentCategories.push(category);
 		}
 	}
-    
-	var tree = jQuery("#filter-div").dynatree("getTree");
-
-	// create an array of the categories that come from the tree
-	var treeCategories = new Array();
-	tree.visit(  function(node) {
-        if (node.data.isCategory)  {
-     	   var cat = node.data.categorySOLR;     	   
-     	   treeCategories.push(cat);        	    
-        }
-      }
-      , false
-    );
-
-    // now construct the facetSearch array by concatenating the values from the cats and terms array
-    for (var i=0; i<categories.length; i++)	{
-    	var queryType = "";
-    	
-    	// determine if category is part of the tree; differentiate these types of query categories
-    	// from others
-    	if (treeCategories.indexOf(categories[i])>-1) {
-    		queryType = "fq";
-    	}
-    	else  {
-    		queryType = "q";
-    	}
-    	facetSearch.push(queryType + "=" + categories[i] + ":" + terms[i]);
-    }
-
-    // now add all tree categories that arene't being searched on to the string
-    for (var i=0; i<treeCategories.length; i++)  {
-    	if (categories.indexOf(treeCategories[i])==-1)  {
-    		queryType = "ff";
-        	facetSearch.push(queryType + "=" + treeCategories[i]);
-    	}
-    }    
-    
-    //display loading message. Note: because the contents of the 'results-div' is replaced,
-    //there is no need to 'unmask' the loading message
-	jQuery("#results-div").mask("Loading..."); 
-    
-    // add study id to list of fields to facet (so we can get count for show search results)
-    facetSearch.push("ff=STUDY_ID");
-    
-    var queryString = facetSearch.join("&");
-    
-   	queryString = queryString + "&showSignificantResults=" + document.getElementById('cbShowSignificantResults').checked
-    
-	jQuery.ajax({
-			url:facetResultsURL,
-			data:queryString,
-			success: function(response) {
-				    // make sure the active keywords haven't changed since we issued query -- if they have, don't update tree with results or results panel 
-				    if (compareKeywordArrays(savedKeywords, activeKeywords) == false)  { 
-				    	return false;
-				    }
-				
-					var facetCounts = response['facetCounts'];
-					var html = response['html'];
-					var errorMsg = response['errorMsg'];
-					
-					if (errorMsg != '')  {
-						alert(errorMsg);
-					}
-					
-					// set html for results panel
-					jQuery('#results-div').html(html);
-					
-					if(!showHomePageFirst)
-				    {
-						hideHomePage();
-						showResultsPage();
-				    }
-					else
-				    {
-						hideResultsPage();
-						showHomePage();
-						showHomePageFirst=false;
-				    }
-
-					if (!initialLoad)  {
-						// assign counts that were returned in json object to the tree
-						tree.visit(  function(node) {
-							           if (!node.data.isCategory && node.data.id)  {
-							        	   var id = node.data.id.toString();
-							        	   var cat = node.data.categorySOLR;
-	
-							        	   var catArray = facetCounts[cat];
-							        	   var count = catArray[id];
-							        	   
-							        	   // no count returned for this node means it isn't in solr index because no records exist
-							        	   if (!count)  {
-							        		   count = 0;
-							        	   }
-							        	   
-							        	   updateNodeIndividualFacetCount(node, count);   
-							           }
-						             }
-					                 , false
-					               );
-											
-						 // redraw entire tree after counts updated
-						 tree.redraw();
-					 }
-				//}
-			},
-			error: function(xhr) {
-				console.log('Error!  Status = ' + xhr.status + xhr.statusText);
-			}
-		});
-   	
 
 }
 
-function getUniqueId()  {
-	uniqueIdSequence++;
-	return uniqueIdSequence
-}
 
-// add a new keyword and its category to arrays passed in (global arrays activeKeywords and activeCategories if no arrays passed in) 
-function addKeyword(searchTerm, categories, keywords)  {
-
-	// we can assume if categories not supplied, that keywords not supplied either, so use global arrays for both
-	if (categories == null)  {
-		categories = activeCategories;
-		keywords = activeKeywords; 
-	}
-	
-	var categoryDisplay = searchTerm.categoryDisplay;	
-	var categoryId = searchTerm.categoryId;
-	var categorySOLR = searchTerm.categorySOLR;
-	var isGeneCategory = false;
-	
-	if (checkGeneCategory(categoryId))   {
-		isGeneCategory = true;
-	}
-	
-    var keyword = searchTerm.keyword;
-	var keywordId = searchTerm.id.toString();
-
-	var uniqueKeywordId = getUniqueId();   // this will be used to uniquely identify the keyword/category combination
-	var removeAnchorId =  'removeKeyword_' + uniqueKeywordId;  // the html element identifier for the anchor tag used for removing keywords from active filter  	
-
-	// add keyword object to global array if not on there already
-	if (getKeyword(keywordId, keywords) == null)  {
-		var keywordObject = {keywordId:keywordId, keyword:keyword, categoryId:categoryId, uniqueKeywordId:uniqueKeywordId, 
-				             removeAnchorId:removeAnchorId, categorySOLR:categorySOLR};
-		keywords.push(keywordObject);	
-		
-		// add category object to global array if not on there already
-		if (getCategory(categoryId, categories) == null)  {
-			var categoryObject = {categoryId:categoryId, categoryDisplay:categoryDisplay, isGeneCategory:isGeneCategory};
-			categories.push(categoryObject);		
-		}
-	}
-	
-	
-}
-
-// Add the search term to the array and show it in the panel.
-function addSearchTerm(searchTerm)	{
-	
-	var categoryId = searchTerm.categoryId;
-	var keywordId = searchTerm.id;
-	
-	addKeyword(searchTerm, activeCategories, activeKeywords);
-	
-	
-	// clear the search text box
-	jQuery("#search-ac").val("");
-	
-	// create flag to track if tree was updated
-	var treeUpdated = false
-	
-	// find all nodes in tree with this key, and select them
-	var tree = jQuery("#filter-div").dynatree("getTree");
-
-	tree.visit(  function selectNode(node) {
-		             if ( node.data.id == keywordId ) {
-		            	 node.select(true);
-		            	 node.makeVisible();
-		            	 treeUpdated = true;
-		             }
-	             }
-			   , false);
-
-	// only refresh results if the tree was not updated (the onSelect also fires these event, so don't want to do 2x)
-	if (!treeUpdated) {
-      showSearchTemplate();
-	  showSearchResults();
-	}
-}
-
-// Remove the search term that the user has clicked.
-function removeSearchTerm(ctrl)	{
-	
-	var keywordIndex = getKeywordByRemoveAnchorId(ctrl.id, activeKeywords); 
-	var keyword = activeKeywords[keywordIndex];
-	
-	var catId = keyword.categoryId;
-	var keywordId = keyword.keywordId;
-	
-	// remove the keyword from global array
-	activeKeywords.splice(keywordIndex, 1);
-	
-	// remove the category if there are no terms left in it
-	clearCategoryIfNoTerms(catId);
-	
-	if(activeKeywords.length == 0){
-		//disable Save link
-		setSaveFilterLink('disable');
-	}
-
-	// Call back to the server to clear the search filter (session scope)
-	jQuery.ajax({
-		type:"POST",
-		url:newSearchURL
-	});
-
-	// create flag to track if tree was updated
-	var treeUpdated = false
-
-	// find all nodes in tree with this key and deSelect
-	var tree = jQuery("#filter-div").dynatree("getTree");
-
-	tree.visit(  function deselectNode(node) {
-                    if (node.data.id == keywordId)  {
-       	                node.select(false);
-  	            	    treeUpdated = true;
-                    }
-                 }
-                 , false);
-	
-	// only refresh results if the tree was not updated (the onSelect also fires these event, so don't want to do 2x)
-	if (!treeUpdated) {
-      showSearchTemplate();
-	  showSearchResults();
-	}
-}
 
 //export the current analysis data to a csv file
 function exportLinePlotData(analysisId, exportType)
@@ -832,13 +326,13 @@ function exportLinePlotData(analysisId, exportType)
 		var data = jQuery('body').data("LineplotData:" + analysisId);
 
 		//redraw the plot with the legend so that it appears in the exported image
-		drawLinePlotD3('lineplotAnalysis_'+analysisId, data, analysisId, true, false, null);
+		drawLinePlot('lineplotAnalysis_'+analysisId, data, analysisId, true);
 
 		var svgID=  "#lineplotAnalysis_"+analysisId;
 		
 		exportCanvas(svgID);		
 		
-		drawLinePlotD3('lineplotAnalysis_'+analysisId, data, analysisId, false, false, null);
+		drawLinePlot('lineplotAnalysis_'+analysisId, data, analysisId, false);
 		
 		break;
 	default:
@@ -876,13 +370,13 @@ function exportBoxPlotData(analysisId, exportType)
 		
 		var data = jQuery('body').data("BoxplotData:" + analysisId);
 		
-		drawBoxPlotD3('boxplotAnalysis_'+analysisId, data, analysisId, true, false, null);
+		drawBoxPlot('boxplotAnalysis_'+analysisId, data, analysisId, true);
 		
 		var svgID=  "#boxplotAnalysis_"+analysisId;
 		
 		exportCanvas(svgID);		
 
-		drawBoxPlotD3('boxplotAnalysis_'+analysisId, data, analysisId, false, false, null);
+		drawBoxPlot('boxplotAnalysis_'+analysisId, data, analysisId, false);
 		
 		break;
 	default:
@@ -901,11 +395,7 @@ function exportCanvas(svgID){
 	if(svgData.indexOf("<a xlink")>-1){
 		svgData = svgData.replace(/(<a xlink(.*?)>|<\/a>)/g, "");
 	}
-		
-	if(svgData.indexOf("<title>")>-1){
-		svgData = svgData.replace(/(<title((.|\s)*?)<\/title>)/g, "");
-	}
-
+	
 	canvg('canvas', svgData, { ignoreMouse: true, ignoreAnimation: true }) ;
 	
 	var imageData =  document.getElementById('canvas').toDataURL();
@@ -926,6 +416,9 @@ function exportCanvas(svgID){
 }
 
 
+
+
+
 //export the current analysis data to a csv file
 function exportHeatmapData(analysisId, exportType)
 {
@@ -935,7 +428,7 @@ function exportHeatmapData(analysisId, exportType)
 	
     jQuery('#heatmapExportOpts_'+analysisId).hide(); //hide the menu box
 
-    jQuery("#analysis_holder_" + analysisId).mask("Loading...");
+    jQuery("#analysis_holder_" + analysisId).mask();
 	
 	switch(exportType)
 	{
@@ -986,12 +479,12 @@ function exportHeatmapData(analysisId, exportType)
 		var divID = "analysisDiv_" + analysisId;
 		
 		//redraw the heatmap with the legend
-		drawHeatmapD3(divID, jQuery('body').data(analysisId), analysisId, true);
+		drawHeatmap(divID, jQuery('body').data(analysisId), analysisId, true);
 		
 		exportCanvas(svgID);	
 		
 		//redraw the heatmap without the legend
-		drawHeatmapD3(divID, jQuery('body').data(analysisId), analysisId, false);
+		drawHeatmap(divID, jQuery('body').data(analysisId), analysisId, false);
 		
 		break;
 		
@@ -1063,6 +556,10 @@ function analysisMenuEvent(id){
 		jQuery('#heatmapExportOpts_'+analysisID).hide();
 		break;
 	
+	case 'btnResultsExport':
+		jQuery('#resultsExportOpts_'+analysisID).toggle();
+		break;		
+		
 	default:
 		
 		console.log("Invalid option: " +id);	
@@ -1070,47 +567,16 @@ function analysisMenuEvent(id){
 	
 }
 
-
-
-
-// Remove the category from current categories list if there are no terms left that belong to it
-function clearCategoryIfNoTerms(categoryId)  {
-	
-	var found = false;
-	for (var j=0; j<activeKeywords.length; j++)	{
-		var categoryId2 = activeKeywords[j].categoryId;
-		
-		if (categoryId == categoryId2)  {
-			found = true; 
-			break;
-		}
-	}
-	
-	if (!found)  {
-		var categoryIndex = getCategoryIndex(categoryId, activeCategories);		
-		activeCategories.splice(categoryIndex, 1);
-	}
-}
-
-
 //Remove the search term that the user has de-selected from filter tree.
-function removeFilterTreeSearchTerm(keywordId)	{
-	
-	var i = getKeywordIndex(keywordId, activeKeywords);
-	
-	if (i != null)	{
-		var catId = activeKeywords[i].categoryId;
-
-		activeKeywords.splice(i, 1);
+function removeFilterTreeSearchTerm(termID)	{
+	var idx = currentSearchTerms.indexOf(termID);
+	if (idx > -1)	{
+		currentSearchTerms.splice(idx, 1);
 
 		// check if there are any remaining terms for this category; remove category from list if none
-		clearCategoryIfNoTerms(catId);
-		
-		if(activeKeywords.length == 0){
-			//disable Save link
-			setSaveFilterLink('disable');
-		}
-
+		var fields = termID.split(":");
+		var category = fields[0];
+		clearCategoryIfNoTerms(category);
 	}
 	
 }
@@ -1118,7 +584,7 @@ function removeFilterTreeSearchTerm(keywordId)	{
 function updateHeatmap(analysisID){
 	
 	var divID = "analysisDiv_" + analysisID;
-	drawHeatmapD3(divID, jQuery('body').data(analysisID), analysisID, false);
+	drawHeatmap(divID, jQuery('body').data(analysisID), analysisID);
 	
 }
 
@@ -1193,8 +659,6 @@ function setVisTabs(analysisID){
 	    }
 	});
 }
-
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Box or Line Plot Visualization Methods
@@ -1293,7 +757,7 @@ function loadLinePlotData(analysisID, probeID)	{
 	
 	if (probeID === undefined)	{
 		// We are called from the user switching probes, throw up the mask and get the probeID
-		jQuery("#analysis_holder_" + analysisID).mask("Loading..."); 
+		jQuery("#analysis_holder_" + analysisID).mask(); //hide the loading screen
 		probeID = jQuery("#probeSelectionLineplot_" + analysisID).find('option:selected').attr('id');
 		
 	}
@@ -1315,7 +779,7 @@ function loadLinePlotData(analysisID, probeID)	{
 			
 			setActiveProbe(analysisID, probeID);
 			jQuery('#analysis_holder_' +analysisID).unmask(); //hide the loading msg, unblock the div 
-			drawLinePlotD3('lineplotAnalysis_'+analysisID, response, analysisID, false, false, null);
+			drawLinePlot('lineplotAnalysis_'+analysisID, response, analysisID);
 			jQuery('#lineplotAnalysis_'+analysisID).show();
 			jQuery('#lineplot_'+analysisID).show();
 
@@ -1338,6 +802,261 @@ function loadLinePlotData(analysisID, probeID)	{
 	});
 }
 
+//Draw the line plot
+function drawLinePlot(divId, linePlotJSON, analysisID, forExport)	{
+	
+	
+	var cohortArray = new Array();   // array of cohort ids
+	var cohortDesc = new Array();    // array of cohort descriptions
+	var cohortDisplayStyles = new Array();    // array of cohort display styles
+	
+	var gene_id = parseInt(linePlotJSON['gene_id']);   // gene_id will be null if this is a protein since first char is alpha for proteins
+
+	// loop through and get the cohort ids and description into arrays in the order they should be displayed
+	for (var key in linePlotJSON)  {
+		// the "order" of the json objects starts with 1, so subtract 1 so it doesn't leave gap at start of array
+		var arrayIndex = linePlotJSON[key]['order'] - 1;
+		cohortArray[arrayIndex] = key;
+		cohortDesc[arrayIndex] = linePlotJSON[key]['desc'];
+		cohortDisplayStyles[arrayIndex] = linePlotJSON[key]['order'] % cohortBGColors.length;		
+		
+	}
+	
+	var statMapping = cohortArray.map(function(i)	{
+		var data = linePlotJSON[i]['data'];
+		
+		// retrieve mean and standard error- round to 4 decimal places
+		var mean = data['mean'];
+		var stdError = data['stdError'];
+		var min = mean - stdError;
+		var max = mean + stdError;
+		var desc = linePlotJSON[i]['desc'].replace(/_/g, ', ');
+		var sampleCount = linePlotJSON[i]['sampleCount'];
+
+		var meanFormatted = parseFloat(mean);
+		meanFormatted = meanFormatted.toFixed(4);
+		
+		var stdErrorFormatted = parseFloat(stdError);
+		stdErrorFormatted = stdErrorFormatted.toFixed(4);
+		
+		var cohortDisplayStyle = linePlotJSON[i]['order'] % cohortBGColors.length; 
+		
+		return {
+			id:i,
+			desc:desc,
+			sampleCount:sampleCount,
+			mean:mean,
+			stdError:stdError,			
+			meanFormatted:meanFormatted,
+			stdErrorFormatted:stdErrorFormatted,			
+			min:min,
+			max:max,
+			cohortDisplayStyle:cohortDisplayStyle
+		};		
+	});
+
+	
+	
+	
+	//if the user is setting the range manually:
+	if(jQuery('#lineplotRangeRadio_Manual_'+analysisID).is(':checked')){
+		
+		var yMin = parseFloat(jQuery('#lineplotRangeMin_'+analysisID).val());
+		var yMax = parseFloat(jQuery('#lineplotRangeMax_'+analysisID).val());
+
+		
+	}else{
+		
+		var yMin = statMapping[0].min;
+		var yMax = statMapping[0].max;
+		for (var idx=1; idx < statMapping.length; idx++)	{	
+			yMin = statMapping[idx].min < yMin ? statMapping[idx].min : yMin;
+			yMax = statMapping[idx].max > yMax ? statMapping[idx].max : yMax;
+		}
+		
+		// Put in a rough switch so things can scale on the y axis somewhat dynamically
+		if (yMax-yMin < 2)	{
+			// round down to next 0.1
+			yMin = Math.floor((yMin-0.1) * 10) / 10;
+
+			// round up to next 0.1
+			// and add another 0.01 to ensure that the highest tenths line gets included
+			yMax = Math.ceil((yMax+0.1) * 10) / 10  + 0.01;
+		} else	{
+			yMin = Math.floor(yMin);
+			yMax = Math.ceil(yMax);
+		}		
+			
+		
+		//set the manual value textboxes with the current yMin and yMax
+		jQuery('#lineplotRangeMin_'+analysisID).val(roundNumber(yMin,2));
+		jQuery('#lineplotRangeMax_'+analysisID).val(roundNumber(yMax,2));
+		
+	}
+
+		
+	var w = cohortArray.length * 150;//generate the width dynamically using the cohort count
+	h = 300,
+	margin = 55,
+	widthErrorBarBottomAndTopLines = 6,
+	radiusDot = 3,
+	h_legend=0;//used to draw the legend for export
+
+	
+	if(forExport){
+		h_legend=35+ 30 * (cohortArray.length); //h_legend is the extra space required for the legend 
+	}
+	
+	
+	var x = pv.Scale.ordinal(statMapping, function(e){return e.id}).splitBanded(0, w, 1/2);
+	var y = pv.Scale.linear(yMin, yMax).range(0, h)			
+	
+	var numCohorts = cohortArray.length;
+	
+	// need to add a blank entry at the beginning of the arrays for use by drawCohortLegend
+	cohortArray = [''].concat(cohortArray);
+	cohortDesc = [''].concat(cohortDesc);
+	cohortDisplayStyles = [''].concat(cohortDisplayStyles);
+	
+	if(forExport){
+		cohortDesc=highlightCohortDescriptions(cohortDesc, true);
+	}
+	
+	
+	var vis = new pv.Panel().canvas(document.getElementById(divId)) 	
+	.width(w)
+	.height(h+h_legend)
+	.margin(margin);
+	
+	/* Add the y-axis rules */
+	vis.add(pv.Rule)
+	.data(y.ticks())
+	.strokeStyle("#ccc")
+	.bottom(y)
+	.anchor("left").add(pv.Label)
+	.font("14px sans-serif")
+	.text(y.tickFormat);
+
+	vis.add(pv.Label)
+	.data(statMapping)
+	.left(function(d){return x(d.id)})
+	.bottom(-20)
+	.textAlign("center")
+	.font("14px sans-serif")
+	.events("all")
+	.title(function(d){return d.desc})	
+	.text(function(d){return d.id + "(n=" + d.sampleCount + ")"});
+	
+	/* Add the log2 label */
+	vis.add(pv.Label)
+	.left(-40)
+	.bottom(h/2)
+	.textAlign("center")
+	.textAngle(-Math.PI / 2)
+	.font("14px sans-serif")
+    .text("log2 intensity");
+	
+	if (gene_id)  {
+		/* Add the title with link to gene info*/
+		vis.add(pv.Label)
+		.font("bold 16px sans-serif")
+		.textStyle("#065B96")
+	    .left(w/2)
+	    .bottom(300)
+	    .textAlign("center")
+	  
+		    /*Add link in title to gene info */
+	    .cursor("pointer")
+	    .event("mouseover", function(){ self.status = "Gene Information"})
+	    .event("mouseout", function(){ self.status = ""})
+	    .event("click", function(d) {self.location = "javascript:showGeneInfo('"+gene_id +"');"})
+		.events("all")
+	    .title("View gene information")
+	    .text(getGeneforDisplay(analysisID, getActiveProbe(analysisID)));
+	}
+	else  {
+		/* Add the title without link to gene info*/
+		vis.add(pv.Label)
+		.font("bold 16px sans-serif")
+		.textStyle("#065B96")
+	    .left(w/2)
+	    .bottom(300)
+	    .textAlign("center")
+	    .text(getGeneforDisplay(analysisID, getActiveProbe(analysisID)));		
+	}
+	// create line
+    var line = 	vis.add(pv.Line)
+    .data(statMapping)
+	.strokeStyle("#000000")
+    .bottom(function(d){return y(d.mean)})
+	.left(function(d){return x(d.id)});
+    
+    // add dots at each point in line
+    line.add(pv.Dot)
+      .radius(radiusDot)
+	  .strokeStyle("#000000")
+      .fillStyle("#000000")
+      .title(function(d){return d.meanFormatted + " +/- " + d.stdErrorFormatted});
+
+    // Add error bars
+    // vertical line
+    line.add(pv.Rule)
+      .left(function(d){return x(d.id)})
+      .bottom(function(d) {return y(d.mean - Math.abs(d.stdError))})
+      .top(function(d) {return y(yMax) - y(d.mean + Math.abs(d.stdError)) + h_legend}); 
+    
+
+    // bottom horizontal line
+    line.add(pv.Rule)
+      .left(function(d){return x(d.id) - widthErrorBarBottomAndTopLines/2} )
+      .bottom(function(d) { return y(d.mean - d.stdError)})
+      .width(widthErrorBarBottomAndTopLines);
+    // top horizontal line
+    line.add(pv.Rule)
+      .left(function(d){return x(d.id) - widthErrorBarBottomAndTopLines/2} )
+      .bottom(function(d) { return y(d.mean + d.stdError)})
+      .width(widthErrorBarBottomAndTopLines);
+    
+	/*add legend if export */
+	if(forExport){
+			
+	    /*		Legend	     */
+	    var legend = vis.add(pv.Bar)
+	    	.data(statMapping)
+	    	.height(25)
+	    	.top(function(){return (this.index * 30)-20 })
+	    	.antialias(false)
+	    	.left(-30)
+	    	.strokeStyle("#000")
+	    	.lineWidth(1)
+	    	.width(30)
+	    	.fillStyle(function (d) {return cohortBGColors[d.cohortDisplayStyle]});
+
+	    legend.anchor("center").add(pv.Label)
+    	.textStyle("#000")
+    	.font("12px  sans-serif")
+    	.text(function(d){return d.id} );
+	    
+	    vis.add(pv.Label)
+	    	.data(statMapping)
+	    .top(function(){return this.index * 30})
+	    .antialias(false)
+	    .left(5)
+    	.textStyle("#000")
+    	.font("12px  sans-serif")
+    //	.text(function(d){return d.desc});   	
+    	.text(function(){return cohortDesc[this.index+1].replace(/_/g, ', ')});
+	}
+
+	
+
+	vis.root.render();
+	
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////		
+	jQuery("#lineplotLegend_" + analysisID).html(drawCohortLegend(numCohorts, cohortArray, cohortDesc, cohortDisplayStyles));
+	
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Box Plot Visualization Methods
@@ -1385,7 +1104,7 @@ function loadBoxPlotData(analysisID, probeID)	{
 	
 	if (probeID === undefined)	{
 		// We are called from the user switching probes, throw up the mask and get the probeID
-		jQuery("#analysis_holder_" + analysisID).mask("Loading..."); 
+		jQuery("#analysis_holder_" + analysisID).mask(); //hide the loading screen
 		probeID = jQuery("#probeSelection_" + analysisID).find('option:selected').attr('id');
 		
 	}
@@ -1411,7 +1130,7 @@ function loadBoxPlotData(analysisID, probeID)	{
 		timeout:60000,
 		success: function(response) {
 			setActiveProbe(analysisID, probeID);
-			drawBoxPlotD3('boxplotAnalysis_'+analysisID, response, analysisID, false, false, null);
+			drawBoxPlot('boxplotAnalysis_'+analysisID, response, analysisID);
 			jQuery('#boxplotLegend_'+analysisID).show();
 			jQuery('#boxplotAnalysis_'+analysisID).show();	
 			
@@ -1471,7 +1190,7 @@ function updateLineplot(analysisID){
 		console.log("Error: Could not find data");
 	}else
 		{
-			drawLinePlotD3('lineplotAnalysis_'+analysisID, data, analysisID, false, false, null);
+			drawLinePlot('lineplotAnalysis_'+analysisID, data, analysisID);
 		}
 }
 
@@ -1482,10 +1201,28 @@ function collapseAllAnalyses(){
 		//each time showVisualization is called, the current analysis is removed from openAnalyses
 		showVisualization(openAnalyses[0], false);
 	}
-	
-	//close all expanded trials
-	while (openTrials.length>0){
-		toggleDetailDiv(openTrials[0], null, null); //only the trial ID must be passed in
+}
+
+function collapseAllStudies() {
+	collapseAllAnalyses();
+	//For each open study, toggleDetailDiv
+	var openstudyelements = jQuery(".analysesopen");
+	for (var i = 0; i < openstudyelements.length; i++) {
+		var studyelement = openstudyelements[i];
+		var studyId = jQuery(studyelement).attr('name');
+		toggleDetailDiv(studyId, ''); //No URL needed when collapsing
+	}
+}
+
+function expandAllStudies() {
+	//For each closed study, toggleDetailDiv
+	var closedstudyelements = jQuery(".detailexpand").not(".analysesopen");
+	for (var i = 0; i < closedstudyelements.length; i++) {
+		var studyelement = jQuery(closedstudyelements[i]);
+		var studyId = studyelement.attr('name');
+		var key = new Date().getTime(); //Key to prevent AJAX caching
+		
+		toggleDetailDiv(studyId, getStudyAnalysesUrl + "?id=" + studyId + "&trialNumber=" + studyId + "&unqKey=" + key);
 	}
 }
 
@@ -1497,7 +1234,7 @@ function updateBoxPlot(analysisID){
 		console.log("Error: Could not find data");
 	}else
 		{
-			drawBoxPlotD3('boxplotAnalysis_'+analysisID, data, analysisID, false, false, null);
+			drawBoxPlot('boxplotAnalysis_'+analysisID, data, analysisID);
 		}
 }
 
@@ -1506,50 +1243,301 @@ function getRank(P, N)	{
 	return Math.round(P/100 * N + 0.5);			// Use P/100 * N + 0.5 as denoted here: http://en.wikipedia.org/wiki/Percentile
 }
 
+// Draw the box plot
+function drawBoxPlot(divId, boxPlotJSON, analysisID, forExport)	{
+	// boxPlotJSON should be a map of cohortID:[desc:cohort description, order:display order for the cohort, data:sorted log2 intensities]
+	
+	
+	var cohortArray = new Array();   // array of cohort ids
+	var cohortDesc = new Array();    // array of cohort descriptions
+	var cohortDisplayStyles = new Array();    // array of cohort display styles (i.e. number from 0..4)
+
+	var gene_id = parseInt(boxPlotJSON['gene_id']);   // gene_id will be null if this is a protein since first char is alpha for proteins
+	
+	// loop through and get the cohort ids and description into arrays in the order they should be displayed
+	for (var key in boxPlotJSON)  {
+		// the "order" of the json objects starts with 1, so subtract 1 so it doesn't leave gap at start of array
+		var arrayIndex = boxPlotJSON[key]['order'] - 1;
+		cohortArray[arrayIndex] = key;
+		cohortDesc[arrayIndex] = boxPlotJSON[key]['desc'];
+		cohortDisplayStyles[arrayIndex] = boxPlotJSON[key]['order'] % cohortBGColors.length;		
+	}
+	
+	// Map the all four quartiles to the key (e.g. C1)
+	var statMapping = cohortArray.map(function(i)	{
+		var data = boxPlotJSON[i]['data'];
+		var cohortDisplayStyle = boxPlotJSON[i]['order'] % cohortBGColors.length;		
+		var desc = boxPlotJSON[i]['desc'].replace(/_/g, ', ');
+		var sampleCount = boxPlotJSON[i]['sampleCount'];
+		
+		return {
+			id:i,
+			cohortDisplayStyle:cohortDisplayStyle,
+			desc:desc,
+			sampleCount:sampleCount,
+			min:data[getRank(5, data.length)-1],
+			max:data[getRank(95, data.length)-1],			
+			median:data[getRank(50, data.length)-1],
+			lq:data[getRank(25, data.length)-1],
+			uq:data[getRank(75, data.length)-1]
+		};		
+	});
+	
+	
+	//if the user is setting the range manually:
+	if(jQuery('#boxplotRangeRadio_Manual_'+analysisID).is(':checked')){
+		
+		var yMin = parseFloat(jQuery('#boxplotRangeMin_'+analysisID).val());
+		var yMax = parseFloat(jQuery('#boxplotRangeMax_'+analysisID).val());
+
+		
+	}else{
+		//auto set range otherwise
+		var yMin = statMapping[0].min;
+		var yMax = statMapping[0].max;
+		for (var idx=1; idx < statMapping.length; idx++)	{	
+			yMin = statMapping[idx].min < yMin ? statMapping[idx].min : yMin;
+			yMax = statMapping[idx].max > yMax ? statMapping[idx].max : yMax;
+		}
+		
+		// Put in a rough switch so things can scale on the y axis somewhat dynamically
+		if (yMax-yMin < 2)	{
+			// round down to next 0.1
+			yMin = Math.floor((yMin-0.2) * 10) / 10 ;
+			
+			// round up to next 0.1
+			// and add another 0.01 to ensure that the highest tenths line gets included
+			yMax = Math.ceil((yMax+0.2) * 10) / 10 + 0.01;
+		} else	{
+			yMin = Math.floor(yMin);
+			yMax = Math.ceil(yMax);
+		}
+		
+		//set the manual value textboxes with the current yMin and yMax
+		jQuery('#boxplotRangeMin_'+analysisID).val(roundNumber(yMin,2));
+		jQuery('#boxplotRangeMax_'+analysisID).val(roundNumber(yMax,2));
+		
+	}
+	
+	var title = getGeneforDisplay(analysisID, getActiveProbe(analysisID));
+	
+	var w = cohortArray.length * 140;//generate the width dynamically using the cohort count	
+	var  h = 300,  
+		x = pv.Scale.ordinal(statMapping, function(e){return e.id}).splitBanded(0, w, 1/2),
+		y = pv.Scale.linear(yMin, yMax).range(0, h-15),
+		s = x.range().band / 2;
+	
+	
+	var numCohorts = cohortArray.length;
+	
+	// need to add a blank entry at the beginning of the arrays for use by drawCohortLegend
+	cohortArray = [''].concat(cohortArray);
+	cohortDesc = [''].concat(cohortDesc);
+	cohortDisplayStyles = [''].concat(cohortDisplayStyles);
+	
+	if(forExport){
+		h=320 + 30 * (cohortArray.length);
+		cohortDesc=highlightCohortDescriptions(cohortDesc, true);
+	}
+
+		var vis = new pv.Panel().canvas(document.getElementById(divId)) 	
+		.width(w)
+		.height(h)
+		.margin(55);
+
+		if (gene_id)  {
+			/* Add the title with link to gene info*/
+			vis.add(pv.Label)
+			.font("bold 16px sans-serif")
+		    .left(w/2)
+		    .bottom(300)
+		    .textStyle("#065B96")
+		    .textAlign("center")
+	    	/*Add link in title to gene info */
+		    .cursor("pointer")
+		    .event("mouseover", function(){ self.status = "Gene Information"})
+		    .event("mouseout", function(){ self.status = ""})
+		    .event("click", function(d) {self.location = "javascript:showGeneInfo('"+gene_id +"');"})
+			.events("all")   
+			.title("View gene information")
+			.text(title);
+		}
+		else {
+			/* Add the title without link to gene info*/
+			vis.add(pv.Label)
+			.font("bold 16px sans-serif")
+		    .left(w/2)
+		    .bottom(300)
+		    .textStyle("#065B96")
+		    .textAlign("center")
+			.text(title);
+			
+		}
+	
+		/* Add the y-axis rules */
+		vis.add(pv.Rule)
+		.data(y.ticks())
+		.strokeStyle("#ccc")
+		.bottom(y)
+		.anchor("left").add(pv.Label)
+		.font("14px sans-serif")
+		.text(y.tickFormat);	
+		
+		/* Add the log2 label */
+		vis.add(pv.Label)
+		.left(-40)
+		.bottom(300/2) //300 is the height of the boxplot
+		.textAlign("center")
+		.textAngle(-Math.PI / 2)
+		.font("14px sans-serif")
+	    .text("log2 intensity");
+
+		/* Add a panel for each data point */
+		var points = vis.add(pv.Panel)
+		.def("showValues", false)
+		.data(statMapping)
+		.left(function(d){return x(d.id)})
+		.width(s * 2)
+		.events("all");
+
+		/* Add the experiment id label */
+		vis.add(pv.Label)
+		.data(statMapping)
+		.left(function(d){return x(d.id) + s})
+		.bottom(-20)
+		.textAlign("center")
+		.font("14px sans-serif")
+		.events("all")
+		.title(function(d){return d.desc})
+		.text(function(d){return d.id + "(n=" + d.sampleCount + ")"});
+		
+		/*add legend if export */
+		if(forExport){
+				
+		    /*		Legend	     */
+		    var legend = vis.add(pv.Bar)
+		    	.data(statMapping)
+		    	.height(25)
+		    	.top(function(){return (this.index * 30)-20 })
+		    	.antialias(false)
+		    	.left(-30)
+		    	.strokeStyle("#000")
+		    	.lineWidth(1)
+		    	.width(30)
+		    	.fillStyle(function (d) {return cohortBGColors[d.cohortDisplayStyle]});
+
+		    legend.anchor("center").add(pv.Label)
+	    	.textStyle("#000")
+	    	.font("12px  sans-serif")
+	    	.text(function(d){return d.id} );
+		    
+		    vis.add(pv.Label)
+		    	.data(statMapping)
+		    .top(function(){return this.index * 30})
+		    .antialias(false)
+		    .left(5)
+	    	.textStyle("#000")
+	    	.font("12px  sans-serif")
+	    //	.text(function(d){return d.desc});   	
+	    	.text(function(){return cohortDesc[this.index+1].replace(/_/g, ', ')});
+		}
+		
+		
+
+		/* Add the range line */
+		points.add(pv.Rule)
+		.left(s)
+		.bottom(function(d){return y(d.min)})
+		.height(function(d){return y(d.max) - y(d.min)});
+
+		/* Add the min and max indicators */
+		var minLine = points.add(pv.Rule)
+			.data(function(d){return [d.min]})
+			.bottom(y)
+			.left(s / 2)
+			.width(s)
+			.anchor("bottom").add(pv.Label)
+			.visible(function(){return this.parent.showValues()}) 
+			.text(function(d){return d.toFixed(2)});
+		
+		var maxLine = points.add(pv.Rule)
+			.data(function(d){return [d.max]})
+			.bottom(y)
+			.left(s / 2)
+			.width(s)
+			.anchor("top").add(pv.Label)
+			.visible(function(){return this.parent.showValues()}) 
+			.text(function(d){return d.toFixed(2)});
+
+		/* Add the upper/lower quartile ranges */
+		var quartileBar = points.add(pv.Bar)
+			.fillStyle(function (d) {return cohortBGColors[d.cohortDisplayStyle]})
+			.bottom(function(d){return y(d.lq)})
+			.height(function(d){return y(d.uq) - y(d.lq)})
+			.strokeStyle("black")
+			.lineWidth(1)
+			.event("mouseover", function() {return this.parent.showValues(true)}) 
+			.event("mouseout", function() {return this.parent.showValues(false)})
+			.antialias(false);
+		
+		var lqLabel = quartileBar.add(pv.Label)
+			.visible(function(){return this.parent.showValues()})
+			.text(function(d){return d.lq.toFixed(2)})
+			.textAlign("right")
+			.textBaseline("top");
+		
+		var uqLabel = quartileBar.anchor("top").add(pv.Label)		
+			.visible(function(){return this.parent.showValues()})
+			.left(-15)
+			.text(function(d){return d.uq.toFixed(2)})
+			.textMargin(-10);
+		
+		/* Add the median line */
+		points.add(pv.Rule)
+		.bottom(function(d){ return y(d.median)})
+		.anchor("right").add(pv.Label)
+		.visible(function(){return this.parent.showValues()})
+		.text(function(d){return d.median.toFixed(2)});
+
+		vis.render();
+
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////		
+		jQuery("#boxplotLegend_" + analysisID).html(drawCohortLegend(numCohorts, cohortArray, cohortDesc, cohortDisplayStyles));
+		
+}
 
 // Show the heatmap visualization 
-function showVisualization(analysisID, changedPaging)	{		
+function showVisualization(analysisID, changedPaging)	{	
+	
 	var analysisHeaderDiv = "#TrialDetail_" + analysisID + "_anchor"
-	var divID = "#analysisDiv_" + analysisID;
-	var divID2 = "analysisDiv_" + analysisID;
+	var divID = "#analysis_results_" + analysisID;
+	var divID2 = "analysis_results_" + analysisID;
 	var loadingDiv = "#analysis_holder_"+ analysisID;
 	var imgExpand = "#imgExpand_"  + analysisID;
 	var div = document.getElementById(divID);	
 	var hmFlagDiv = divID+"_state";
 	var hmFlag = jQuery(hmFlagDiv).val();
+	
 	// Check the value of the hidden field that is capturing the following "click" states
 	// 0: No heatmap loaded, hidden
 	// 1: Heatmap loaded, visible
 	// 2: Heatmap loaded, hidden
-
+	
 	// if the paging has changed, need to reload page
-	if (hmFlag != "1" || changedPaging)	{				
+	if (hmFlag != "1")	{				
 		var src = jQuery(imgExpand).attr('src').replace('down_arrow_small2.png', 'up_arrow_small2.png');
 		jQuery(imgExpand).attr('src',src);
 		jQuery(analysisHeaderDiv).addClass("active-analysis");
+		jQuery(loadingDiv).toggle();
+		openAnalyses.push(analysisID); //store this as an open analysis
 		
+		if (hmFlag == "0")	{
 
-		
-		if(!changedPaging){
-			jQuery(loadingDiv).toggle();
-			openAnalyses.push(analysisID); //store this as an open analysis
-		}
-
-		if (hmFlag == "0" || changedPaging)	{
-			// don't re-set heap map controls if re-loading because of a change in probes per page
-			if (!changedPaging)  {
-				setVisTabs(analysisID);
-				setHeatmapControls(analysisID);
-			
-				// sync the local probes per page setting with the global one if not re-loading because of changed paging
-				probesPerPageElementGlobal = document.getElementById("probesPerPage");
-				probesPerPageElementHeatmap = document.getElementById("probesPerPage_"+analysisID);
-				probesPerPageElementHeatmap.selectedIndex = probesPerPageElementGlobal.selectedIndex;
-		    }
-
+			setVisTabs(analysisID);
 			jQuery(loadingDiv).mask("Loading...");
-			loadHeatmapPaginator(divID2, analysisID, 1);			
-		}		
+			loadAnalysisResultsGrid(analysisID, {'max': 10, 'offset':0, 'cutoff': 0, 'search': "", 'sortField': "", "order": "asc"});
+		}
+		
 		jQuery(hmFlagDiv).val("1");
 	} else	{
 		var src = jQuery(imgExpand).attr('src').replace('up_arrow_small2.png', 'down_arrow_small2.png');
@@ -1566,36 +1554,71 @@ function showVisualization(analysisID, changedPaging)	{
 	return false;
 }
 
+//This function will kick off the webservice that generates the QQ plot.
+function loadQQPlot(analysisID)
+{
+	jQuery('#qqplot_results_' +analysisID).empty().addClass('ajaxloading');
+	jQuery.ajax( {
+	    "url": getQQPlotURL,
+	    bDestroy: true,
+	    bServerSide: true,
+	    data: {analysisId: analysisID},
+	    "success": function ( json ) {
+	    	jQuery('#analysis_holder_' +analysisID).unmask();
+	    	jQuery('#qqplot_results_' + analysisID).prepend("<img src='" + json.imageURL + "' />").removeClass('ajaxloading');
+	    	jQuery('#qqplot_export_' + analysisID).attr('href', json.imageURL);
+	    	},
+	    "error": function ( json ) {
+	    	jQuery('#qqplot_results_' + analysisID).prepend(json).removeClass('ajaxloading');
+	    	jQuery('#analysis_holder_' +analysisID).unmask();
+	    },
+	    "dataType": "json"
+	} );		
+}
+
+// This function will load the analysis data into a GRAILS template.
+function loadAnalysisResultsGrid(analysisID, paramMap)
+{
+	paramMap.analysisId = analysisID
+	jQuery('#analysis_results_table_' + analysisID + '_wrapper').empty().addClass('ajaxloading');
+	jQuery.ajax( {
+	    "url": getAnalysisDataURL,
+	    bDestroy: true,
+	    bServerSide: true,
+	    data: paramMap,
+	    "success": function (jqXHR) {
+	    	jQuery('#analysis_holder_' +analysisID).unmask();
+	    	jQuery('#analysis_results_table_' + analysisID + '_wrapper').html(jqXHR).removeClass('ajaxloading');
+	    },
+	    "error": function (jqXHR, error, e) {
+	    	jQuery('#analysis_results_table_' + analysisID + '_wrapper').html(error).removeClass('ajaxloading');
+	    	jQuery('#analysis_holder_' +analysisID).unmask();
+	    },
+	    "dataType": "html"
+	} );		
+}
+
 // Make a call to the server to load the heatmap data
-// keyword query string is optional, is provided for use by the heatmap shown on cta for a specific analysis
-function loadHeatmapData(divID, analysisID, probesPage, probesPerPage,  isSA, keywordsQueryString)	{
+function loadHeatmapData(divID, analysisID, probesPage, probesPerPage)	{
 	
 	rwgAJAXManager.add({
 		url:getHeatmapDataURL,
-		data: {id: analysisID, probesPage: probesPage, probesPerPage:probesPerPage, isSA:isSA, keywordsQueryString:keywordsQueryString},
+		data: {id: analysisID, probesPage: probesPage, probesPerPage:probesPerPage},
 		timeout:60000,
 		success: function(response) {
-			if (!isSA)  {
-				jQuery('body').data(analysisID, response); //store the result set in case the heatmap is updated 
-				jQuery('#analysis_holder_' +analysisID).unmask(); //hide the loading msg, unblock the div				
-				drawHeatmapD3(divID, response, analysisID, false);	
-				jQuery('#'+divID).show();   // why needed, not needed with old heat map?
-				jQuery('#heatmapLegend_'+analysisID).show();
-		        var analysisIndex = getAnalysisIndex(analysisID);
-		        var probesList = analysisProbeIds[analysisIndex].probeIds;
-		        var maxProbeIndex = analysisProbeIds[analysisIndex].maxProbeIndex;
-				
-				if(maxProbeIndex == 1){ //only one probe returned
-					loadBoxPlotData(analysisID, probesList[0]);	//preload boxplot
-				}	        
-			}
-			else  {
-				jQuery('#analysis_holderSA_' +analysisID).unmask(); //hide the loading msg, unblock the div				
-				drawHeatmapD3(divID, response, analysisID, false, isSA, keywordsQueryString);	
-				jQuery('#'+divID).show();   // why needed, not needed with old heat map?
-			}
+			jQuery('body').data(analysisID, response); //store the result set in case the heatmap is updated 
+			jQuery('#analysis_holder_' +analysisID).unmask(); //hide the loading msg, unblock the div
+			drawHeatmap(divID, response, analysisID);		
+			jQuery('#heatmapLegend_'+analysisID).show();
 
 
+	        var analysisIndex = getAnalysisIndex(analysisID);
+	        var probesList = analysisProbeIds[analysisIndex].probeIds;
+	        var maxProbeIndex = analysisProbeIds[analysisIndex].maxProbeIndex;
+			
+			if(maxProbeIndex == 1){ //only one probe returned
+				loadBoxPlotData(analysisID, probesList[0]);	//preload boxplot
+			}	        
 	        
 		},
 		error: function(xhr) {
@@ -1607,10 +1630,502 @@ function loadHeatmapData(divID, analysisID, probesPage, probesPerPage,  isSA, ke
 //displays pop-up of gene with tabs to internal and external sources
 function showGeneInfo(geneID)
 {
-	var w=window.open('./../details/gene/?rwg=y&altId='+geneID , 'detailsWindow', 'width=900,height=800'); 
+	var w=window.open('/transmart/details/gene/?rwg=y&altId='+geneID , 'detailsWindow', 'width=900,height=800'); 
 	w.focus(); 
 }
 
+// Take the heatmap data in the second parameter and show it in the Protovis panel
+function drawHeatmap(divID, heatmapJSON, analysisID, forExport)	{
+	
+	
+	// set up arrays to be used to populating drop down boxes for line/box plots
+	// do this first since we need this for determining max probe string length
+	var probesList = new Array() 
+	var selectList = new Array()
+	var hasFoldChange = false; //true if the data contains fold change values
+    var hasTPvalue = false;
+    var hasPvalue = false;
+    var hasNullValues = false; //checks if there are null in the heatmap; null legend should only be displayed if so
+	var maxProbeLength = 0;
+	for (var i=0; i<heatmapJSON.length; i++)	{
+		probesList.push(heatmapJSON[i].PROBE);
+		selectList.push(heatmapJSON[i].GENE + " (" + heatmapJSON[i].PROBE + ")");		
+		if (heatmapJSON[i].PROBE.visualLength("10px Verdana, Tahoma, Arial") > maxProbeLength)  {
+			//maxProbeLength = heatmapJSON[i].PROBE.length;
+			maxProbeLength = heatmapJSON[i].PROBE.visualLength("10px Verdana, Tahoma, Arial");
+		}
+		if(heatmapJSON[i].FOLD_CHANGE != null){
+			hasFoldChange = true;
+			}
+		if(heatmapJSON[i].TEA_P_VALUE != null){
+			hasTPvalue = true;
+			}
+		if(heatmapJSON[i].PREFERRED_PVALUE != null){
+			hasPvalue = true;
+			}
+		//check if any of the heatmapJSON values are undefined. The legend for null values will
+		//only display if 'hasNullValues' is true
+		//"key.indexOf(':') > 0" <- this is used to only check the chohorts (ex, 'C1:3432'). Other key values are ignored
+		for (var key in (heatmapJSON[i])){
+				if(heatmapJSON[i][key] == undefined && key.indexOf(':') > 0){
+	    			hasNullValues=true;
+			}
+		}
+		
+	}
+	
+    var analysisIndex = getAnalysisIndex(analysisID);
+
+    analysisProbeIds[analysisIndex].probeIds = probesList;
+    analysisProbeIds[analysisIndex].selectList = selectList;
+
+    // reset the active probe for the other plots to be the first on this page
+    setActiveProbe(analysisID, probesList[0]);
+    
+	//store the max probe length for this analysis
+	jQuery('body').data("maxProbeLength:" + analysisID, maxProbeLength);	    
+	
+	// First, we need to get the subject IDs that we will use for mapping the color range
+	// We also need the two cohort prefixes and when the cohort first subset ends as these will be used for the legend	
+
+	var cellID = "#heatmapSlider_" +analysisID;
+	var colorSliderID = "#heatmapColorSlider_" +analysisID;
+	
+	var cellSize = parseInt(jQuery(cellID).slider( "option", "value" ));
+	
+	var w_probe = 6 + parseInt(jQuery('body').data("maxProbeLength:" + analysisID));
+	
+	
+	var rangeMax = parseInt(jQuery(colorSliderID).slider( "values", 1 )) /100.0;
+	var rangeMin = parseInt(jQuery(colorSliderID).slider( "values", 0 )) / 100.0;
+	var rangeMid = (rangeMax + rangeMin)/2;
+	
+	//set the header font size depending on the cell size
+	var headerfont = "12px  sans-serif";
+	if(cellSize < 12){
+		headerfont = "8px  sans-serif";
+	}else if (cellSize>19){
+		headerfont = "16px  sans-serif";
+	}
+	
+	var columns = new Array();
+
+	
+	// create an array for cohorts, their descriptions, and their switch positions
+	var cohorts = new Array();
+	var cohortDescriptions = new Array();
+	var cohortSwitches = new Array();
+	var cohortDisplayStyles = new Array();
+		
+	var idx = 0;
+	
+	var firstRowData = heatmapJSON[0];
+	for (var key in firstRowData)	{
+		// We have two types of values in the first row of the array
+		// Metadata values: GENE, PROBE, FOLD_CHANGE, TEA_P_VALUE and the N cohort descriptions 		
+		// Normalized values: The data given by the key Cohort:Subject 
+		// First, we see if the cohort is cohort:subject unless it is Gene
+		var keyArray = key.split(':');
+		if (keyArray.length == 1)	{
+			// OK, so we have metdata, ignore everything except the cohort info
+			
+			// add key to appropriate array, depending upon what it starts with
+			if (key.indexOf('SWITCH_') == 0)  {
+				cohortSwitches[key.slice(7)] = firstRowData[key]
+			}
+			else if (key.indexOf('DESC_') == 0)  {
+				cohortDescriptions[key.slice(5)] = firstRowData[key]
+			}
+			else if (key.indexOf('COHORT_') == 0)  {
+				cohorts[key.slice(7)] = firstRowData[key]
+			}
+
+				
+		} else	{
+			// We have data, save the key (e.g. C19:C0525T0300023) as the column metadata
+			columns[idx] = key;			
+			idx++;
+		}
+	}
+	
+	// The fill variable will have a map of the columns array as the key and a color range as the value 
+
+	fill = pv.dict(columns, function(f) {
+		return pv.Scale.linear()	
+		.domain(rangeMin,rangeMid,rangeMid,rangeMax) 
+	    .range("#4400BE", "#D7D5FF","#ffe2f2", "#D70C00"); 
+	});
+
+	
+/*	This code is for the "local" heatmap shading option, but is incomplete
+	
+	var x = pv.dict(columns, function(f) { return pv.mean(heatmapJSON, function(d){return d[f]}) }),
+    s = pv.dict(columns, function(f) { return pv.deviation(heatmapJSON, function(d){ return d[f] })}),
+ fill = pv.dict(columns, function(f) { return pv.Scale.linear()
+        .domain(-3 * s[f] + x[f], x[f], x[f], 3 * s[f] + x[f])
+        .range("#4400BE", "#D7D5FF","#ffe2f2", "#D70C00")});	
+*/	
+	
+	
+	
+	// Hardcode the size of the cell and the labels
+	var w_sample = 75, w_gene = 75, h_header=6, w_fold_change = 75, w_Tpvalue =75, w_pvalue = 75;			// Label dimensions
+	var w = cellSize, h = cellSize;									    							// Cell dimensions
+	
+	if(!hasFoldChange){
+		w_fold_change = 0; //if there is no fold change data, we need no space for it
+	}
+	
+	if(!hasTPvalue){
+		w_Tpvalue =0;
+	}
+	
+	if(!hasPvalue){
+		w_pvalue=0;
+	}
+	var numCohorts = cohorts.size()-1;   // there is no cohort at index 0
+
+	
+	// need to add a blank entry at the beginning of the arrays for use by drawCohortLegend
+//	cohortArray = [''].concat(cohortArray);
+//	cohortDesc = [''].concat(cohortDesc);
+//	cohortDisplayStyles = [''].concat(cohortDisplayStyles);
+		
+	var height;
+	if(forExport){
+		height = 4*h +h_header + (heatmapJSON.length * h) + (cohorts.size()-1)*35;
+		cohortDescriptions=highlightCohortDescriptions(cohortDescriptions, true);
+	}else{
+		height = 4*h +h_header + (heatmapJSON.length * h);
+	}
+	
+	var vis = new pv.Panel().canvas(document.getElementById(divID)) 				    					// First panel is the canvas where everything is drawn
+    	.width(w_probe + columns.length * w + w_gene + w_fold_change + w_pvalue + w_Tpvalue)				    		// Width of the entire panel									
+    	.height(height)			    									// Height of the entire panel 
+    	
+    vis.add(pv.Panel)
+        .data(columns)
+    	.left(function()	{
+    		return w_probe + this.index * w;
+    	})
+    	.width(w)
+    	.add(pv.Panel)
+    	.data(heatmapJSON)
+    	.top(function()	{
+    		return h + (this.index * h) + h_header;
+    	})
+    	.height(h)
+    	.fillStyle(function(d, f)	{
+    		if (d[f] == undefined)	{
+    			return "#FFFF00";
+    		} else	{
+    			return fill[f](d[f]);
+
+    		}
+    	})
+
+
+    	.strokeStyle("#333333")
+    	.lineWidth(1)
+    	.antialias(false)
+    	.title(function(d, f)	{			// title is the tooltip
+    		var cohort = f.split(':')[0];    		
+    		if (d[f] == undefined){
+    			return cohort + ":" + d["PROBE"] + ":" + d["GENE"] + "=" + d[f];
+    		} else	{
+    			return cohort + ":" + d["PROBE"] + ":" + d["GENE"] + "=" + d[f].toFixed(2);
+    		}    		
+    	});
+
+	// create array of cohort widths
+	var cohortWidths = new Array();
+	for(var i=1; i<=numCohorts; i++) {
+		if (i == numCohorts)  {
+		    cohortWidths[i] = w * (columns.length - cohortSwitches[i]);			
+		}
+		else  {
+		    cohortWidths[i] = w * (cohortSwitches[i+1] - cohortSwitches[i]);
+		}
+	}
+
+	var leftPosition = w_probe;
+	for(var i=1; i<=numCohorts; i++) {		
+		var classIndex;
+		
+		cohortDisplayStyles[i] = i % cohortBGColors.length;
+
+		var dataColor = cohortBGColors[i % cohortBGColors.length];
+		var strokeStyleColor = "#000";
+		var textStyleColor = "#000";
+		
+		/* cohort header */
+		var barC = vis.add(pv.Bar)
+	    	.data([dataColor])
+	    	.height(h)
+	    	.top(2)
+	    	.antialias(false)
+	    	.left(leftPosition)
+	    	.strokeStyle(strokeStyleColor)
+	    	.title(cohortDescriptions[i].replace(/_/g, ', '))
+	    	.lineWidth(1)
+	    	.width(cohortWidths[i])
+	    	.fillStyle(function(d)	{
+	    		          return d;
+    	                 }
+	    	           );
+
+	    barC.anchor("center").add(pv.Label)
+    	.textStyle(textStyleColor)
+    	.font(headerfont)
+    	.text(cohorts[i] );
+	    
+	    
+	    //only draw the legend if the result is being exported as an image
+	    if(forExport){
+	    	
+		    /*		Legend	     */
+		    var legend = vis.add(pv.Bar)
+		    	.data([dataColor])
+		    	.height(25)
+		    	.top(2*h + (heatmapJSON.length * h)+h_header + i*30)
+		    	.antialias(false)
+		    	.left(0)
+		    	.strokeStyle(strokeStyleColor)
+		    	.lineWidth(1)
+		    	.width(30)
+		    	.fillStyle(function(d)	{
+		    		          return d;
+	    	                 });
+
+		    legend.anchor("center").add(pv.Label)
+	    	.textStyle(textStyleColor)
+	    	.font(headerfont)
+	    	.text(cohorts[i] );
+		    
+		    vis.add(pv.Label)
+		    .top(2*h + (heatmapJSON.length * h)+h_header + i*30 +20)
+		    .antialias(false)
+		    .left(35)
+	    	.textStyle(textStyleColor)
+	    	.font("12px  sans-serif")
+	    	.text(cohortDescriptions[i].replace(/_/g, ', '));   	
+	    	
+	    }
+
+	    // determine left position for next cohort
+	    leftPosition = leftPosition + cohortWidths[i];
+	}	
+	
+	//only do this if the data contains fold change values
+	if(hasFoldChange){
+	    // Show the fold change table header
+	    vis.add(pv.Label)
+	    	.width(w_fold_change)
+	    	.top(h_header+11)
+			.left(w_probe + columns.length * w + w_gene)
+	    	.textAlign("left")
+	    	.font("bold 11px sans-serif")
+	    	.text("Fold change");
+	    
+	    
+	    // Show the fold change
+	    vis.add(pv.Label)
+			.data(heatmapJSON)
+			.top(function()	{
+				return (h + (this.index * h + h / 2) + h_header);
+			})
+			.width(w_fold_change)
+			    	.strokeStyle("#333333")
+	    	.lineWidth(1)
+	    	.antialias(false)
+			.left(w_probe + columns.length * w + w_gene)
+			.textAlign("left")
+			.textBaseline("middle")
+			.text(function(d)	{
+				return d.FOLD_CHANGE;
+			});
+	}
+    
+	if(hasTPvalue)
+	{
+	    // Show the tea p value header    
+	    vis.add(pv.Label)
+			.width(w_Tpvalue)
+			.top(h_header+11)
+			.left(w_probe + columns.length * w + w_gene + w_fold_change)
+			.textAlign("left")
+		    .font("bold 11px sans-serif")
+			.text("TEA p-value"); 
+	    
+	    // Show the tea p value
+	    vis.add(pv.Label)
+			.data(heatmapJSON)
+			.top(function()	{
+				return (h + (this.index * h + h / 2) + h_header);
+			})
+			.width(w_pvalue)
+			.left(w_probe + columns.length * w + w_gene + w_fold_change)
+			.textAlign("left")
+			.textBaseline("middle")
+			.text(function(d)	{
+				if (d.TEA_P_VALUE == 0)  {
+					return "< 0.00001"
+				}
+				else  {
+					return d.TEA_P_VALUE;
+				}
+			});
+	}
+	
+	if(hasPvalue){
+		
+	    //show the p-value header
+	    vis.add(pv.Label)
+			.width(w_pvalue)
+			.top(h_header+11)
+			.left(w_probe + (columns.length * w) + w_gene + w_fold_change +w_Tpvalue)
+			.textAlign("left")
+		    .font("bold 11px sans-serif")
+			.text("p-value"); 
+	    
+	    // Show the p value
+	    vis.add(pv.Label)
+			.data(heatmapJSON)
+			.top(function()	{
+				return (h + (this.index * h + h / 2) + h_header);
+			})
+			.width(w_pvalue)
+			.left(w_probe + (columns.length * w) + w_gene + w_fold_change +w_Tpvalue)
+			.textAlign("left")
+			.textBaseline("middle")
+			
+			.text(function(d)	{
+				if (d.PREFERRED_PVALUE == 0)  {
+					return "< 0.00001"
+				}
+				else  {
+					return d.PREFERRED_PVALUE;
+				}
+			});
+	}
+	
+
+    // Show the Gene labels
+    vis.add(pv.Label)
+    	.data(heatmapJSON)
+    	.top(function()	{
+    		return (h + (this.index * h + h / 2) + h_header);
+		})
+		.width(w_gene)
+		.left(w_probe + columns.length * w)
+		
+		//add hyperlink to gene label that opens pop-up
+	    .cursor( function(d) {if (parseInt(d.GENE_ID)) {return "pointer"}})
+	    .event("mouseover", function(d){ if (parseInt(d.GENE_ID))  {self.status = "Gene Information"}})
+	    .event("mouseout", function(d){ self.status = ""})
+	    .event("click", function(d) {if (parseInt(d.GENE_ID))  {self.location = "javascript:showGeneInfo('"+d.GENE_ID +"');"}})
+
+	    .textAlign("left")
+		.textBaseline("middle")
+		.events("all")
+		.title(function(d)	{
+			return d.GENELIST;
+		})
+		.text(function(d)	{
+			return d.GENE;
+		}); 
+    
+    // Show the Probe labels
+    vis.add(pv.Label)
+    	.data(heatmapJSON)
+    	.top(function()	{
+    		return (h + (this.index * h + h / 2) + h_header);
+    	})
+    	.width(w_probe)
+
+    	//add link to view boxplot of values
+        .cursor("pointer")
+	
+	    .event("mouseout", function(){ self.status = ""})
+	    .event("click", function(d) {self.location = "javascript:openBoxPlotFromHeatmap(" +analysisID +", '" +d.PROBE +"');"})
+
+	    .events("all")
+    	.textAlign("left")
+    	.font("10px Verdana, Tahoma, Arial")
+    	.textBaseline("middle")
+    	.title("View in boxplot")
+    	.text(function(d)	{
+    		return d.PROBE;
+    	});
+    
+
+	vis.add(pv.Bar)
+		.data(["#4400BE"])
+		.height(15)
+		.left(w_probe)
+		.width(55)
+		.top(2*h + (heatmapJSON.length * h) + h_header)
+		.fillStyle(function(d)	{
+			return d;
+		})
+		.anchor("left")
+		.add(pv.Label)
+		.textStyle("white")
+		.text("min: "+Math.round((rangeMin)*100)/100);//Math.round get nearest integer		
+	
+	vis.add(pv.Bar)
+		.data(["#D70C00"])
+		.height(15)
+		.width(55)
+		.left(w_probe + 85)
+		.top(2*h + (heatmapJSON.length * h) + h_header)
+		.fillStyle(function(d)	{
+			return d;
+		})
+		.anchor("left")
+		.add(pv.Label)
+		.textStyle("white")
+		.text("max: " + Math.round((rangeMax)*100)/100); //Math.round get nearest integer
+	
+	
+	//draw legend for null values only if they exist in the current heatmap
+	if(hasNullValues){
+		vis.add(pv.Bar)
+		.data(["#FFFF00"])
+		.height(15)
+		.width(55)
+		.left(w_probe + 170)
+		.top(2*h + (heatmapJSON.length * h) + h_header)
+		.fillStyle(function(d)	{
+			return d;
+		})
+		.anchor("left")
+		.add(pv.Label)
+		.textStyle("black")
+		.text("null");	
+		
+	}
+	
+
+
+	vis.root.render();					// Need root panel for the canvas call to work
+	jQuery("#heatmapLegend_" + analysisID).html(drawCohortLegend(numCohorts, cohorts, cohortDescriptions, cohortDisplayStyles));
+}
+
+// Helper function to draw the legend for the cohorts in the visualization panel
+function drawCohortLegend(numCohorts, cohorts, cohortDescriptions, cohortDisplayStyles)	{
+	
+	cohortDescriptions = highlightCohortDescriptions(cohortDescriptions);
+	
+	var pCohortAll = "<table class='cohort_table'>"
+	var classIndex = null;
+	var pCohort = "";
+	for(var i=1; i<=numCohorts; i++) {
+		pCohort = "<tr><td style='width:40px'><p class='cohort' style='background-color:" + cohortBGColors[cohortDisplayStyles[i]]  + "'>" +cohorts[i] +"</p></td><td><p class='cohortDesc'>"+cohortDescriptions[i].replace(/_/g, ', ')+'</p></td>';
+		pCohortAll = pCohortAll +  pCohort;
+	}
+	return pCohortAll + "</table>	";
+}
 
 //Show diff between each cohort
 //returnOnlyDiff: if true, return only the different terms
@@ -1619,22 +2134,11 @@ function highlightCohortDescriptions(cohortDesc, returnOnlyDiff){
 	var arySplit = new Array();
 	var aryDif = new Array();
 	var aryDescNew = new Array();
-	var termCount = 0;
-	
-	//0. Perform validation to ensure that all descriptions contain the same number of terms
-	//	 If validation fails, return the cohortDesc array without formatting and exit function
-	termCount= cohortDesc[1].split('_').length;
-	for (var i=2; i<cohortDesc.length; i++){
-		if(cohortDesc[i].split('_').length != termCount){
-			return cohortDesc;
-		}
-	}
 	
 	//1. Split each cohort description into an array of terms
 	for (var i=1; i<cohortDesc.length; i++){
 		arySplit[i]= cohortDesc[i].split('_');
 	}
-	
 	
 	//2. Loop through the array and compare each term to the term in the same position of the next description
 	//	 mark which ones are same and different in aryDif
@@ -1708,15 +2212,6 @@ function goToByScroll(id){
 	jQuery('#main').animate({scrollTop: jQuery("#"+id).offset().top},'slow');
 }
 
-function checkGeneCategory(catId)  {
-	if ((catId == 'GENE') || (catId == 'PATHWAY') || (catId == 'GENELIST') || (catId == 'GENESIG')) {
-		return true;
-	}
-	else  {
-		return false;
-	}
-}
-
 /* Find the width of a text element */
 String.prototype.visualLength = function(fontFamily) 
 { 
@@ -1724,744 +2219,119 @@ String.prototype.visualLength = function(fontFamily)
     ruler.style.font = fontFamily; 
     ruler.innerHTML = this; 
     return ruler.offsetWidth; 
-} 
+}
 
 
 
+//Round number to given decimal place
 function roundNumber(num, dec) {
 	var result = Math.round(num*Math.pow(10,dec))/Math.pow(10,dec);
 	return result;
 }
 
-//Main method to show the current array of search terms (if no args passed in, being used to populate search terms div; otherwise we're retrieving html for tooltip
-function showSearchTemplate(categories, keywords)	{
-	
-	// if categories and terms not passed in, use the global arrays (this is for popuataing div); else, this is for tooltip, and we'll pass back generated
-	//   HTML
-	var tooltip;
-	if (!categories)  {
-		tooltip = false;
-		categories = activeCategories;
-		keywords = activeKeywords;
-	}
-	else {
-		tooltip = true;
-	}
-	
-	var searchHTML = '';
-	
-	var firstItem = true;
+function openSaveSearchDialog()  {
 
-	// iterate through categories array and move all the "gene" categories together
-	var newCategories = new Array();
-	
-	var geneCategoriesProcessed = false;
-	for (var i=0; i<categories.length; i++)	{
+	var keywords = getSearchKeywordList();
+
+	if (keywords.length>0)  {
+		jQuery('#save-modal-content').modal();
+	}
+	else  {
+		alert("No search criteria to save!")
+	}
 		
-		// when we find a "gene" category, add it and the rest of the "gene" categories to the new array
-		if (categories[i].isGeneCategory) {
-			// first check if we've processed "gene" categories yet
-			if (!geneCategoriesProcessed)  {
-				
-				// add first gene category to new array
-				newCategories.push(categories[i]);
 
-				// look for other "gene" categories, starting at the next index value, and add each to array
-				for (var j=i+1; j<categories.length; j++)	{
-					if (categories[j].isGeneCategory) {
-						newCategories.push(categories[j]);
-					}				
-				}
-				// set flag so we don't try to process again
-				geneCategoriesProcessed = true;
-			}
-		}
-		else  {    // not a gene catageory, add to new list
-			newCategories.push(categories[i]);
-		}
-	}
-	
-	// replace old array with new array
-	categories = newCategories;
-	
-	for (var i=0; i<categories.length; i++)	{
-		for (var j=0; j<keywords.length; j++)	{
-			
-			if (categories[i].categoryId == keywords[j].categoryId)  {
-											
-				if (firstItem)	{
-					var catDisplay = categories[i].categoryDisplay;
-
-					if (i>0)	{	
-						
-						var suppressAnd = false;
-						// if this is a "gene" category, check the previous category and see if it is also one
-		                if (categories[i].isGeneCategory)  {
-		                	if (categories[i - 1].isGeneCategory)  {
-		                		suppressAnd = true;	
-		                	}
-		                } 
-						
-		                // if previous category is a "gene" category, don't show AND
-		                if (!suppressAnd)  {
-							searchHTML = searchHTML + "<span class='category_join'>AND<span class='h_line'></span></span>";  			// Need to add a new row and a horizontal line
-					    }
-		                else  {
-							searchHTML = searchHTML + "<br/>";  				                	
-		                }
-					}
-					searchHTML = searchHTML +"<span class='category_label'>" + catDisplay + "&nbsp;></span>&nbsp;";
-					firstItem = false;
-				} else	{
-					searchHTML = searchHTML + "<span class='spacer'>| </span>";
-				}				
-
-				var aTag = '';
-				var imgTag = ''
-
-				// don't include a or img tags if for tooltip
-				if (!tooltip)  {
-					aTag = '&nbsp;<a id="' + keywords[j].removeAnchorId + '" class="term-remove" href="#" onclick="removeSearchTerm(this);">' 
- 
-					imgTag = '<img alt="remove" src="./../images/small_cross.png"/></a>&nbsp;'
-				}
-					
-				searchHTML = searchHTML + "<span class=term>"+ keywords[j].keyword + aTag + imgTag + "</span>";
-			} else	{
-				continue;												// Do the categories by row and in order
-			}
-		}
-		firstItem = true;
-	}
-	
-	if (!tooltip)  {
-		// populate div if not tooltip
-		
-		//changing the internal html causes problems for the resizable feature
-		//so, destry the resizeable code first, then reapply after updating the html
-		jQuery('#active-search-div').resizable("destroy");
-		
-		jQuery('#active-search-div').html(searchHTML);
-		
-		setActiveFiltersResizable();
-		    	
-		
-		if(keywords.length > 0){
-			//enable Save link
-			setSaveFilterLink('enable');
-		}
-	}
-	else  {		
-		// html for tooltip - just return the html
-		return searchHTML;
-	}
-}
-
-//Allows resizing the "Active Filters" div
-function setActiveFiltersResizable(){
-	
-	jQuery('#active-search-div').resizable({
-    	maxWidth:280,
-		minWidth:280,
-		handles: "s",
-        resize: function (event,ui){
-				jQuery("#title-filter").css({ top: 127 + ui.size.height +'px' });
-				jQuery("#side-scroll").css({ top: 155 + ui.size.height +'px' });
-            },
-         stop:function (event,ui){
-				
-				jQuery("#title-filter").css({ top: 127 + ui.size.height +'px' });
-				jQuery("#side-scroll").css({ top: 155 + ui.size.height +'px' });
-          }
-    });
-	
-	//fix some issues with the size to prevent scroll bars
-	jQuery('.ui-resizable-e').css({right:0});
-	jQuery('.ui-resizable-s').css({bottom:0});
-	
-}
-
-
-// retrieve the current list of search keyword ids
-function getSearchKeywordList()   {
-
-	var keywords = new Array();
-	
-	for (var j=0; j<activeKeywords.length; j++)	{
-		keywords.push(activeKeywords[j].keywordId);
-	}
-	
-	return keywords;
-}
-
-//retrieve the current list of search keyword ids for the cross trial analysis
-function getXTSearchKeywordList()   {
-
-	var keywords = new Array();
-	
-	for (var j=0; j<xtSelectedKeywords.length; j++)	{
-		keywords.push(xtSelectedKeywords[j].id);
-	}
-	
-	return keywords;
-}
-
-//retrieve the current list of analyssis ids for the cross trial analysis
-function getXTAnalysisIdList()   {
-
-	var analysisIds = new Array();
-	
-	for (var j=0; j<selectedAnalyses.length; j++)	{
-		analysisIds.push(selectedAnalyses[j].id);
-	}
-	
-	return analysisIds;
-}
-
-
-// focus the first visible child element of the passed in element that is an input type
-function focusFirstInput(parent)  {		
-	var child = parent.find('input[type=text],textarea,select').filter(':visible:first'); 
-	if (child.length == 1)  {
-	    child.focus();	
-	}
-}
-
-function modalEffectsOpen(dialog)  {
-	
-    dialog.overlay.fadeIn(150, function () {
-		    dialog.container.slideDown(150,   function () {dialog.data.fadeIn(150, 
-		    		                                       function() {focusFirstInput(dialog.container);}  );
-			  								              }
-                          );
-                                            });
-}
-
-function modalEffectsClose(dialog)  {
-			dialog.data.fadeOut(150, function () {  
-				dialog.container.slideUp(150, function () {
-					dialog.overlay.fadeOut(150, function () {
-						jQuery.modal.close(); 
-		      });
-		    });
-		  });
-
-		  jQuery("#searchTooltip").remove();
-			
-}
-
-
-//enable or disable the save filter link
-function setSaveFilterLink(state){
-	
-	if(state == 'enable'){		
-		jQuery('#save-modal').removeClass('title-link-inactive');
-		jQuery('#save-modal').addClass('title-link-active');
-		jQuery('#save-modal').unbind('click').click(function(){openSaveSearchDialog(false);});   
-		
-		}
-	else if (state == 'disable'){
-
-		jQuery('#save-modal').addClass('title-link-inactive');
-		jQuery('#save-modal').removeClass('title-link-active');
-		jQuery('#save-modal').off('click');
-	}
-}
-
-//enable or disable the save xt filter link
-function setSaveXTFilterLink(){
-	if ((xtSelectedKeywords.length > 0) && (selectedAnalyses.length > 0)) {  
-		jQuery('#save-modal-xt').removeClass('title-link-inactive');
-		jQuery('#save-modal-xt').addClass('title-link-active');
-		jQuery('#save-modal-xt').unbind('click').click(function(){openSaveSearchDialog(true);});
-		
-		}
-	else {
-		jQuery('#save-modal-xt').addClass('title-link-inactive');
-		jQuery('#save-modal-xt').removeClass('title-link-active');
-		jQuery('#save-modal-xt').off('click');
-
-	}
-}
-
-//enable or disable the clear xt filter link
-function setClearXTLink(){
-	if ((xtSelectedKeywords.length > 0) || (selectedAnalyses.length > 0)) {  
-		jQuery('#clear-xt').removeClass('title-link-inactive');
-		jQuery('#clear-xt').addClass('title-link-active');
-		jQuery('#clear-xt').unbind('click').click(function(){openSaveSearchDialog(true);});
-		}
-	else {
-		jQuery('#clear-xt').addClass('title-link-inactive');
-		jQuery('#clear-xt').removeClass('title-link-active');
-		jQuery('#clear-xt').off('click');
-	}
-}
-
-
-
-function openSaveSearchDialog(isXT)  {
-
-	var keywords;
-	var analysisIds;
-	var title;
-	var clickFunction;
-	if (!isXT)  {
-		keywords = getSearchKeywordList();
-		title = 'Save Faceted Search'
-		clickFunction = function() {
-			saveSearch('FACETED_SEARCH');};
-	}
-	else {
-		keywords = getXTSearchKeywordList();
-		analysisIds = getXTAnalysisIdList();
-		title = 'Save Cross Trial Analyses';
-		
-		if (analysisIds.length == 0)  {
-			alert('No analyses to save!')
-			return false;
-		}
-
-		clickFunction = function() {
-			saveSearch('XT');};
-		
-	}
-
-	if (keywords.length == 0)  {
-		alert('No keywords to save!')
-		return false;
-	}
-
-	jQuery('#saveModalTitle').html(title);
-	
-	// make sure we unbind any click events first, or else they keep get adding and we end up calling
-	//   the save search function multiple times
-	jQuery("#saveSearchLink").unbind('click').click(clickFunction);
-	
-	jQuery('#save-modal-content').modal({onOpen: modalEffectsOpen, opacity: [70], position: ["25%"], onClose: modalEffectsClose,
-		onShow: function (dialog) {
-        dialog.container.css("height", "auto");
-		    }	
-
-	});
+	return false;
 
 }
 
 // save a faceted search to the database
-function saveSearch(searchType)  {
-	
-	var keywords;
-	var analysisIds;
-	var analysisIdsString;
-	
-	if (searchType == 'XT')  {
-		
-		keywords = getXTSearchKeywordList();
-		analysisIds = getXTAnalysisIdList();
+function saveSearch(keywords, name, desc)  {
 
-		if (!analysisIds)  {
-			alert('Analysis Ids must be provided for saving a Cross Trial Search!');
-			return;
-		}
-	    analysisIdsString = analysisIds.join("|")
-	    
-	}
-	else  {
-		keywords = getSearchKeywordList();		
-	}
-		
-	var nameField = 'searchName'; 
-	var name = jQuery("#" + nameField).val();
-	
-	if  (!name) {
-		jQuery("#modal-status-message").show().html("Please provide a Name to save this filter.");
-		return false;
-	}
+	var name = jQuery("#searchName").val();
+	var desc = jQuery("#searchDescription").val();
+	var keywords = getSearchKeywordList();
 
 	//  had no luck trying to use JSON libraries for creating/parsing JSON string so just save keywords as pipe delimited string 
 	if (keywords.length>0)  {
-		var keywordsString = keywords.join("|");
-		
-    	jQuery("#save-modal-content").mask("Saving...");
-		
+		var criteriaString = keywords.join("|") 
 		rwgAJAXManager.add({
 			url:saveSearchURL,
-			data: {keywords: keywordsString, name: name, searchType:searchType, analysisIds: analysisIdsString},
+			data: {criteria: criteriaString, name: name, description:desc},
 			timeout:60000,
 			success: function(response) {
-		    	jQuery("#save-modal-content").unmask();
-
-		    	
-		    	  if (response['success'])  {
-		    		    jQuery('#save-modal-content-main').fadeOut(200, function(){
-		    		    	jQuery("#modal-status-message").fadeIn(250).html(response['message']);
-					    	jQuery('#modal-status-message').delay(800).fadeOut(400, function() {
-				            	jQuery.modal.close();
-				    		  });	
-		    		    });
-		    		    
-		    		    refreshHomeFavorites(searchType);
-		    	  	}else{
-	    		    	jQuery("#modal-status-message").fadeIn(200).html(response['message']);
-		    	  	}
+	            alert(response['message']);	
+	            
+	            // close the dialog if success flag was true
+	            if (response['success'])  {
+	            	jQuery.modal.close();	            	
+	            }
 	            
 			},
 			error: function(xhr) {
-		    	jQuery("#save-modal-content").unmask();
 				console.log('Error!  Status = ' + xhr.status + xhr.statusText);
 			}
 		});
 	}
 	else  {
-		alert("No search keywords to save!")
+		alert("No search criteria to save!")
 	}
 	
 }
-
-//update a faceted search in the database 
-function updateSearch(id, searchType)  {
-
-	var name = jQuery("#searchName_" + id).val();
-	
-	if  (!name) {
-		
-		jQuery("#modal-status-message_"+id).show('highlight').html('Pleae enter a name to save the filter.');
-    
-		return false;
-	}
-
-	jQuery("#load-modal-content").mask("Saving...");
-	rwgAJAXManager.add({
-		url:updateSearchURL,
-		data: {id:id, name: name},
-		timeout:60000,
-		success: function(response) {
-			
-        	jQuery("#load-modal-content").unmask();
-            // close the dialog and update static field if success flag was true
-            if (response['success'])  {
-            	
-            	jQuery("#labelSearchName_" + id).text(name);
-
-            	refreshHomeFavorites(searchType);
-            	
-            	hideEditSearchDiv(id);	            	
-            }else
-            	{
-        			jQuery("#modal-status-message_"+id).show('highlight').html(response['message']);
-            	}
-            
-		},
-		error: function(xhr) {
-        	jQuery("#load-modal-content").unmask();
-			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
-		}
-	});
-	
-}
-
 
 //delete a faceted search from the database
-function deleteSearch(id, searchType)  {
+function deleteSearch()  {
 	
-	var name = jQuery("#labelSearchName_" + id).text();
-	
-	if (!confirm('Are you sure you want to delete search "' + name + '"?'))  {
-		return false;
-	}
-	
-	jQuery("#load-modal-content").mask("Deleting...");
 	rwgAJAXManager.add({
 		url:deleteSearchURL,
-		data: {id: id},
+		data: {name: "testname23"},
 		timeout:60000,
 		success: function(response) {
-        	jQuery("#load-modal-content").unmask();
-            
-            
-            if (response['success'])  {
-            	jQuery("#filter_favorites_"+id).remove();
-            	
-            	refreshHomeFavorites(searchType);
-            }
-            else {
-            	alert(response['message']);
-        	}
-        
-		},
-		error: function(xhr) {
-        	jQuery("#load-modal-content").unmask();
-			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
-		}
-	});
-	
-}
-
-//show the edit search div for the given search id
-function showEditSearchDiv(id)  {
-
-	// first hide any other edit divs that might be showing and show the static version
-   	jQuery("#favoritesTable div.editSearchDiv").hide();	            	
-   	jQuery("#favoritesTable div.staticSearchDiv").show();	            	
-	
-   	
-   	// now hide this specific static div, and show its edit div
-   	jQuery("#staticSearchDiv_" + id).hide(200);   	   	
-   	jQuery("#editSearchDiv_" + id).show(200, function() {  		
-		   		focusFirstInput(jQuery(this));
-		   	 } 
-   	);	            	
-}
-
-//hide the edit search div for the given search id
-function hideEditSearchDiv(id)  {
-				
-   	jQuery("#editSearchDiv_" + id).hide(200);	            	
-   	jQuery("#staticSearchDiv_" + id).show(200);	            	
-}
-
-
-
-function openLoadSearchDialog(isXT)  {
-	
-//	var html = "";
-	var keywords;
-	var analysisIds;
-	var title;
-	var clickFunction;
-	var searchType;
-	if (!isXT)  {
-		title = 'Load Favorite';
-		searchType = 'FACETED_SEARCH';
-	}
-	else {
-		title = 'Load Cross Trial Analyses';
-		searchType = 'XT';
-	}
-
-	jQuery('#loadSearchModalTitle').html(title);
-	
-    jQuery('#load-modal-content').modal({onOpen: modalEffectsOpen, position: ["5%"], onClose: modalEffectsClose });
-    
-    jQuery('#simplemodal-container').mask("Loading...");
-	
-	rwgAJAXManager.add({
-		url:renderFavoritesTemplateURL,									
-		data: {searchType:searchType}, 
-		timeout:60000,
-		success: function(response) {
-		
-		    jQuery('#load-modal-content').html(response);
-		    jQuery('#simplemodal-container').unmask();
-			
+            alert(response['message']);	        
 		},
 		error: function(xhr) {
 			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
 		}
 	});
 	
-	return false;
-
 }
 
-function refreshHomeFavorites(searchType)  {
-	
-	var searchType;
-	var div;
-	if (searchType == 'XT')  {
-		div = 'savedCrossTrialAnalysis';
-	}
-	else {
-		div = 'homefavorites';
-	}
-    
-    jQuery('#' + div).mask("Loading...");
-	
-	rwgAJAXManager.add({
-		url:renderHomeFavoritesTemplateURL,									
-		data: {searchType:searchType}, 
-		timeout:60000,
-		success: function(response) {
-		
-		    jQuery('#' + div).html(response);
-		    jQuery('#' + div).unmask();
-			
-		},
-		error: function(xhr) {
-			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
-		}
-	});
-	
-	return false;
 
-}
+function loadSearch()  {
 
-// load in the saved favorites (type=FACETED_SEARCH or XT) with the given id
-function loadSearch(searchType, id)  {
-
-	if (searchType=='XT')  {
-//		jQuery("#cross-trial-div").mask("Loading...");
-	}
 	
 	rwgAJAXManager.add({
 		url:loadSearchURL,
-		data: {id: id, searchType:searchType},   
+		data: {id: 37},   //37
 		timeout:60000,
 		success: function(response) {
-        	jQuery.modal.close();	            	
+			clearSearch();
 			
 			if (response['success'])  {
-				if (searchType=='FACETED_SEARCH') {
-					// clear global arrays
-					activeCategories = new Array();
-					activeKeywords = new Array();
-									
-					var tree = jQuery("#filter-div").dynatree("getTree");
-	
-					// clear the selected items from tree
-					// Make sure the onSelect event doesn't fire for the nodes
-					// Otherwise, the main search query is going to fire after each item is deselected, as well as facet query
-					allowOnSelectEvent = false;
-					tree.visit(function clearNode(node) {
-														 updateNodeIndividualFacetCount(node, -1);
-						                                 node.select(false);
-					                                    }, 
-					                                    false
-					           )
-					allowOnSelectEvent = true;
-	
-					var searchTerms = response['searchTerms'] 
-					var count = response['keywordCount'] 
-					var termsNotFound = response['termsNotFound'] 
+				var searchTerms = response['searchTerms'] 
+				var count = response['count'] 
+				
+				for (i=0; i<count; i++)  {
+					// e.g. "Therapeutic Areas|THERAPEUTIC AREAS:Immunology:1004"
 					
-					for (i=0; i<count; i++)  {
-						
-						var searchParam={id:searchTerms[i].id,
-								         categoryDisplay:searchTerms[i].categoryDisplay,
-								         keyword:searchTerms[i].keyword,
-								         categoryId:searchTerms[i].categoryId,
-								         categorySOLR:searchTerms[i].categorySOLR
-								         };
-						
-						// make sure we call addKeyword and NOT addSearchTerm (if  we call the latter then we requery SOLR every time
-						//    we add one of the saved terms back in)
-						addKeyword(searchParam, activeCategories, activeKeywords);
-						
-						// select the keyword in the tree
-						allowOnSelectEvent = false;    // onSelect event will cause a SOLR query call; we don't want this for each term, only at end
-						tree.visit(  function selectNode(node) {
-				             if ( node.data.id == searchTerms[i].id ) {
-				            	 node.select(true);
-				             }
-			             }
-					   , false);
-						allowOnSelectEvent = true;
-					}
+					var searchParam={id:searchTerms[i].id,
+							         display:searchTerms[i].displayDataCategory,
+							         keyword:searchTerms[i].keyword,
+							         category:searchTerms[i].dataCategory};
+					addSearchTerm(searchParam);
 
-					showSearchTemplate();
-					showSearchResults(); //reload the full search results
-		
-	            	if (termsNotFound > 0)  {
-	            		alert(termsNotFound + ' terms could not be loaded from the saved search.  Results may not be as expected.')
-	            	}
 				}
-				else {
-					var searchTerms = response['searchTerms'] 
-					var count = response['keywordCount'] 
-					var termsNotFound = response['termsNotFound'] 
-					var analyses = response['analyses'] 
-					var analysisCount = response['analysisCount'] 
-					var analysesNotFound = response['analysesNotFound'] 
 					
-				    jQuery("#xtNoHeatmapsMsg").show();
-					jQuery("#xtNoGenesMsg").show();
-
-					xtSelectedKeywords = [];					
-					for (var kw in searchTerms)  {
-						addXTSelectedKeyword(searchTerms[kw].id, searchTerms[kw].keyword, searchTerms[kw].categoryId);
-
-					}
-					
-					selectedAnalyses = []; 
-					for (var a in analyses)  {
-						selectedAnalyses.push({'id':analyses[a].id, 'title':analyses[a].title, 'studyID':analyses[a].studyId});
-					}
-					
-					selectedAnalyses.sort(analysesSort());
-					
-					jQuery.cookie('selectedAnalyses', JSON.stringify(selectedAnalyses));
-
-					var newLabel = "(" + selectedAnalyses.length + ")";
-					jQuery("#analysisCountLabel").html(newLabel);					
-					
-					updateCrossTrialGeneCharts();
-					
-					showCrossTrialAnalysis();
-					
-	            	if (termsNotFound > 0)  {
-	            		alert(termsNotFound + ' terms could not be loaded from the saved XT analysis.  Results may not be as expected.')
-	            	}
-	            	if (analysesNotFound > 0)  {
-	            		alert(analysesNotFound + ' analyses could not be loaded from the saved XT analysis.  Results may not be as expected.')
-	            	}
-				}
-				jQuery("#searchTooltip").remove();
-				 
 			}
 			else  {
-				alert(response['message']);  // show message from server  
+				alert('failed');  // show message from server  
 			}
-			
-		//	jQuery("#cross-trial-div").unmask();
-			
  		},
 		error: function(xhr) {
 			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
 		}
 	});
 
-}
-
-
-
-
-// Clear the tree, results along with emptying the two arrays that store categories and search terms.
-function clearSearch()	{
-	
-	//remove all pending jobs from the ajax queue
-	rwgAJAXManager.clear(true);
-	
-	openAnalyses = []; //all analyses will be closed, so clear this array
-	
-	
-	//disable Save link
-	setSaveFilterLink('disable');
-	
-	jQuery("#search-ac").val("");
-	
-	activeKeywords = new Array();
-	activeCategories = new Array();
-	
-	// Change the category picker back to ALL and set autocomplete to not have a category (ALL by default)
-	document.getElementById("search-categories").selectedIndex = 0;
-	jQuery('#search-ac').autocomplete('option', 'source', sourceURL);
-		
-	var tree = jQuery("#filter-div").dynatree("getTree");
-	
-	// Make sure the onSelect event doesn't fire for the nodes
-	// Otherwise, the main search query is going to fire after each item is deselected, as well as facet query
-	allowOnSelectEvent = false;
-	tree.visit(function clearNode(node) {
-										 updateNodeIndividualFacetCount(node, -1);
-		                                 node.select(false);
-	                                    }, 
-	                                    false
-	           )
-	allowOnSelectEvent = true;
-
-	showSearchTemplate();
-	showSearchResults(); //reload the full search results
-	
 }
 
 // this function removes or adds to the filter search term array based on whether or not a node in the tree is selected
@@ -2474,8 +2344,7 @@ function syncNode(node)  {
 		return true
 	}
 
-	var categoryId = node.data.categoryId;
-	var categoryDisplay = node.data.categoryDisplay;
+	var categoryName = node.data.categoryName;
 	
 	var outerNode = node;
 	var inSearchTerms = false;
@@ -2487,7 +2356,7 @@ function syncNode(node)  {
 	//         say it shouldn't be - but making consistent for now, can reverse logic easily if needed )
 	node.tree.visit(
 			          function checkCopies (node) {
-			        	  if (outerNode.data.id == node.data.id)  {
+			        	  if (outerNode.data.key == node.data.key)  {
 			        		  // found a key that matches (i.e. is the original one or a copy)
         	        		  // a node will be in search terms if it is selected and it's parent is not
 			        		  // or if it's selected and it's parent is a category
@@ -2499,16 +2368,16 @@ function syncNode(node)  {
 			          false
 			       )
 		
-	param.categoryId = categoryId;       // category id        	
-	param.categoryDisplay = categoryDisplay;     // category display        	
-	param.categorySOLR = node.data.categorySOLR;       // category for SOLR field        	
+	param.display = categoryName;     // category        	
 	param.keyword = node.data.termName;  // term name
-	param.id = node.data.id;             //keyword id
+	param.id = node.data.id;
 	if (inSearchTerms)  {
-	    addKeyword(param, activeCategories, activeKeywords);
+	    addFilterTreeSearchTerm(param);
 	}
 	else {
-		removeFilterTreeSearchTerm(node.data.id);
+		// create string that remove fn recognizes as key
+		var termID = node.data.key;
+		removeFilterTreeSearchTerm(termID);
 	}
 	
 }
@@ -2540,172 +2409,7 @@ function subtractNodes(nodes1, nodes2)  {
 	return resultNodes;
 }
 
-jQuery.ui.dynatree.nodedatadefaults["icon"] = false;
-
-
-jQuery(function(){
-    jQuery("#filter-div").dynatree({
-    	initAjax: {  url: treeURL,
-    		data: { mode: "all" } 
-    	},
-    	checkbox: true,
-    	persist: false,
-    	selectMode: 3,
-    	minExpandLevel: 1,
-    	fx:{ height: "toggle", duration: 180 },
-    	autoCollapse: true,
-        onQuerySelect: function(flag, node) {   // event that is triggered prior to select actually happening on node
-        	
-        	if (!allowOnSelectEvent)  {
-        		return true;
-        	} 
-        	
-        	// before selecting node, save a copy of which nodes were selected
-        	// (note that this only gets done when select is called outside of the onSelect event since we're using the global allowOnSelectEvent flag above) 
-        	nodesBeforeSelect = node.tree.getSelectedNodes(false);
-
-        },
-        onSelect: function(flag, node) {
-
-        	// don't allow this event to be triggered by itself; return immediately if called as a result of the event itself
-        	if (!allowOnSelectEvent)  {
-        		return true;
-        	} 
-        	else  {
-        		allowOnSelectEvent = false;
-        	}
-        	
-        	// before re-synchronizing tree, make sure any nodes that have same key as this one have been properly
-        	// selected and deselected
-            
-        	var tree = node.tree;        	
-            var selectNode = node;   // store the node that was selected so we can reference unambiguously in tree.visit function below 
-
-        	// node is now selected, and any other changes to the tree have already happened (i.e. changes to children, parents,
-            //   cousins, second cousins, ...) so retrieve a copy of which nodes are now selected
-        	var nodesAfterSelect = node.tree.getSelectedNodes(false);
-           
-            // retrieve a list of those that are partially selected (e.g. no check box but a child or grandchild .. may be);
-            var nodesPartiallySelected = new Array();
-        	jQuery(".dynatree-partsel").each(
-        			function(){
-        		                  var node = jQuery.ui.dynatree.getNode(this);
-        		                  
-        		                  //  Selected nodes may also appear here - 
-        		                  //   make sure only those that are not selected are actually included
-        		                  //    in this list; 
-        		                  //  And don't add category nodes either
-        		                  if (!node.isSelected() && !node.data.isCategory)  {
-        		                      nodesPartiallySelected.push(node);
-        		                  }
-        		              }
-        			);
-        	
-        	
-        	
-        	// find nodes that are in After but were not in Before (i.e. Added)
-        	var nodesAdded = subtractNodes(nodesAfterSelect, nodesBeforeSelect);
-
-        	for (var i = 0; i < nodesAdded.length; i++) {
-        		var n = nodesAdded[i];
-        		// process node if it's not a category
-        		if (!n.data.isCategory)  {
-            		// loop through every node in tree and find copies, make sure all copies are selected        		
-    	            n.tree.visit(  function (node) {
-      	                              if ((n.data.id == node.data.id) && (n.data.uniqueTreeId != node.data.uniqueTreeId)) {
-    	            	            	  node.select(true);
-    	            	              } 
-    	            	           } 
-    	                         , false
-    	            		     );
-                }
-        		
-        		
-        	}
-
-        	// find nodes that are in Before but were not in After (i.e. Removed)
-        	var nodesRemoved = subtractNodes(nodesBeforeSelect, nodesAfterSelect);
-        	
-        	// We need to remove partially selected nodes from removed list, since we don't want to call the select(false) method on these;
-            //   if we did, then we would trigger all children to then be deselected in copies which isn't right;  instead the state of this
-        	//   node will be controlled by actions on the children 
-        	var nodesFullyRemoved = subtractNodes(nodesRemoved, nodesPartiallySelected);
-        	
-        	for (var i = 0; i < nodesFullyRemoved.length; i++) {
-        		var n = nodesFullyRemoved[i];         		
-
-        		// process node if it's not a category
-        		if (!n.data.isCategory)  {
-            		// loop through every node in tree and find copies, make sure all copies are DEselected
-    	            n.tree.visit(  function (node) {
-    	            	              if ((n.data.id == node.data.id) && (n.data.uniqueTreeId != node.data.uniqueTreeId)) {
-    	            	            	  node.select(false);
-    	            	              } 
-    	            	           } 
-    	                         , false
-    	            		     );
-                }
-        		
-        	}
-        	
-        	// reset flag to true now that we're past part that might trigger the event again	      
-    		allowOnSelectEvent = true;
-
-        	// Resynchronize entire tree when something changes
-        	// We need to do this because a select may affect other nodes than the one selected,
-        	//  but that doesn't trigger the onSelect event
-        	// Following call executes the syncNode function on all nodes in tree, except for root
-        	node.tree.visit(syncNode, false); 
-        	showSearchTemplate();
-        	showSearchResults();        	
-        },
-        onClick: function(node, event) {
-        	// if the user clicked outside the node, but in the tree, don't select/unselect the node
-        	// or if the node has a zero count and is not selected, don't allow it to be selected (but allow it to be expanded)       	
-            if( (node.getEventTargetType(event) == null) ||             	 
-           		(node.data.facetCount == 0 && !node.isSelected() && !(node.getEventTargetType(event) == 'expander'))
-              )
-            {
-                return false;// Prevent default processing
-            }
-            return true;
-        },
-        onActivate: function(node){
-	    	if(!node.data.isCategory){
-	    		if(!node.isSelected()){
-	    			node.select(true);
-	    		}
-	    		else{
-	    			node.select(false);
-	    		}
-	    	
-	    	}
-	    	
-	    	node.deactivate();
-    	},
-    	onCustomRender: function(node) {
-    		// if not a category and count is zero, apply the custom class to node
-    		if (!node.data.isCategory && node.data.facetCount == 0)  {
-    			node.data.addClass = "zero-selected";
-    		}
-    		else
-    	    {
-    			node.data.addClass = null;
-    	    }
-    		
-    		// if the string doesn't already have a break tag, add one after the 30th character
-    		if (node.data.title.length > 30 && node.data.title.indexOf('<br />') == -1)  {
-    			// find the first space character starting at 30th character
-    			var spacePos = node.data.title.indexOf(' ', 30);
-    		    		
-    			if (spacePos > -1)  {
-        			node.data.title = node.data.title.substr(0, spacePos) + '<br />' + node.data.title.substr(spacePos + 1);      				
-    			} 
-    		} 
-    	}
-    });
-});
-
+//jQuery.ui.dynatree.nodedatadefaults["icon"] = false;
 
 
 // find the analysis in the array with the given id
@@ -2719,92 +2423,6 @@ function getAnalysisIndex(id)  {
     return -1;  // analysis not found		
 }
 
-//find the analysis in the sa array with the given id
-function getAnalysisIndexSA(id)  {
-	for (var i = 0; i < analysisProbeIdsSA.length; i++)  {
-		if (analysisProbeIdsSA[i].analysisId == id)  {
-			return i;
-		}
-	}
-	
-    return -1;  // analysis not found		
-}
-
-// compare the contents of one array of keyword objects with another; if same, return true
-function compareKeywordArrays(arr1, arr2)  {
-	if (arr1.length != arr2.length)  {
-		// lengths don't match
-		return false;
-	}
-	
-	for (var i = 0; i < arr1.length; i++)  {
-		if (arr1[i].keywordId != arr2[i].keywordId)  {
-			// one of the keywords doesn't match
-			return false;
-		}
-	}
-	
-    return true;  		
-}
-
-//find the keyword in the array with the given keyword id and return its index
-function getKeywordIndex(keywordId, keywords)  {
-	for (var i = 0; i < keywords.length; i++)  {
-		if (keywords[i].keywordId == keywordId)  {
-			return i;
-		}
-	}
-	
-    return null;  // keyword not found		
-}
-
-//find the keyword in the array with the given keyword id and return the object
-function getKeyword(keywordId, keywords)  {
-	var i = getKeywordIndex(keywordId, keywords);
-	
-	if (i != null)  {
-		return keywords[i];
-	}
-	else  {
-		return null;  // keyword not found
-	}
-}
-
-//find the keyword in the array with the given anchor id return its index in array
-function getKeywordByRemoveAnchorId(anchorId, keywords)  {
-	for (var i = 0; i < keywords.length; i++)  {
-		if (keywords[i].removeAnchorId == anchorId )  {
-			return i;
-		}
-	}
-	
-    return null;  // keyword not found		
-}
-
-//find the category in the array with the given category id and return the object
-function getCategory(categoryId, categories)  {
-
-	var i = getCategoryIndex(categoryId, categories);
-	
-	if (i != null)  {
-		return categories[i];
-	}
-	else  {
-		return null;  // category not found
-	}
-}
-
-//find the category in the array with the given category id and return its index
-function getCategoryIndex(categoryId, categories)  {
-	for (var i = 0; i < categories.length; i++)  {
-		if (categories[i].categoryId == categoryId)  {
-			return i;
-		}
-	}
-	
-    return null;  // category not found		
-}
-
 //remove an element from an array by value, keeping all others in place
 function removeByValue(arr, val) {
 	for(var i=0; i<arr.length; i++) {
@@ -2816,15 +2434,9 @@ function removeByValue(arr, val) {
 }
 
 
-
-function getHeatmapPaginator(divID, analysisId, analysisIndex, maxProbeIndex, isSA, keywordQueryString) {
-    if (isSA)  {
-    	numberOfProbesPerPage = 20;
-    }
-    else  {    	
-    	probesPerPageElement = document.getElementById("probesPerPage_" + analysisId);
-    	numberOfProbesPerPage = probesPerPageElement.options[probesPerPageElement.selectedIndex].value;
-    }
+function getHeatmapPaginator(divID, analysisId, analysisIndex, maxProbeIndex) {
+	probesPerPageElement = document.getElementById("probesPerPage_" + analysisId);
+	numberOfProbesPerPage = probesPerPageElement.options[probesPerPageElement.selectedIndex].value;
 	
 	// get number of extra probes on last page (will be 0 if last page is full)
 	var numberProbesLastPage = maxProbeIndex % numberOfProbesPerPage;
@@ -2838,218 +2450,109 @@ function getHeatmapPaginator(divID, analysisId, analysisIndex, maxProbeIndex, is
 		numberOfPages = numberOfPages + 1;
 	}
 	
-	var saPrefix ='';
-	if (isSA)  {
-		saPrefix ='sa';
-	}
-	
 	//if there is only 1 page, just hide the paging control since it's not needed
 	if(numberOfPages==1){
-		jQuery("#" + saPrefix + "pagination_" + analysisId).hide();
+		jQuery("#pagination_" + analysisId).hide();
 	}
 	else  {
-		jQuery("#" + saPrefix + "pagination_" + analysisId).show();
+		jQuery("#pagination_" + analysisId).show();
 	}
 	        	        	
 	// the probeIds list and selectList are initially null; will be populated when we load the heat map data
 	var analysisObject = {analysisId:analysisId, probeIds:null, selectList:null, maxProbeIndex:maxProbeIndex};
-		
+	
 	// either replace current object, or add new one if not in array yet
 	if (analysisIndex == -1)  {
-		if (isSA)  {
-	        analysisProbeIdsSA.push(analysisObject);
-		}
-		else  {			
-	        analysisProbeIds.push(analysisObject);
-		}
+        analysisProbeIds.push(analysisObject);
     } else
     {	
-		if (isSA)  {
-	        analysisProbeIdsSA[analysisIndex] = analysisObject;
-		}
-		else  {			
-	        analysisProbeIds[analysisIndex] = analysisObject;
-		}
+        analysisProbeIds[analysisIndex] = analysisObject;
     }
 
-	jQuery("#" + saPrefix + "pagination_" + analysisId).paging(numberOfPages, { 
+	jQuery("#pagination_" + analysisId).paging(numberOfPages, { 
 	    perpage:1, 
         format:"[<(qq -) ncnnn (- pp)>]",
         onSelect: function (page) { 
         	
-        	if (isSA)  {
-        		jQuery("#analysis_holderSA_" + analysisId).mask("Loading...");
-        	}
-        	else  {        		
-            	jQuery("#analysis_holder_" + analysisId).mask("Loading...");
-        	}
 
-            if (isSA)  {
-            	numberOfProbesPerPage = 20;
-            }
-            else  {
-                // make sure we are getting number of probes per page for current element
-                var probesPerPageElement = document.getElementById("probesPerPage_" + analysisId);
-            	var numberOfProbesPerPage = probesPerPageElement.options[probesPerPageElement.selectedIndex].value;            	
-            }
+        	jQuery("#analysis_holder_" + analysisId).mask("Loading...");
+            var analysisIndex = getAnalysisIndex(analysisId);
+
+            // make sure we are getting number of probes per page for current element
+            var probesPerPageElement = document.getElementById("probesPerPage_" + analysisId);
+        	var numberOfProbesPerPage = probesPerPageElement.options[probesPerPageElement.selectedIndex].value;
             
-        	loadHeatmapData(divID, analysisId, page, numberOfProbesPerPage, isSA, keywordQueryString);
+        	loadHeatmapData(divID, analysisId, page, numberOfProbesPerPage);
 
-        	if (!isSA)  {
-        		jQuery('body').data("currentPage:" + analysisId, page);	
-        	}        	
+        	jQuery('body').data("currentPage:" + analysisId, page);
                                     
         }, 
-        onFormat: formatPaginator
+        onFormat: function(type) {      
+      
+                switch (type) {      
+                case 'block':      
+                    	if (!this.active)      
+                    		return '<span class="disabled">' + this.value + '</span>';      
+                    	else if (this.value != this.page)      
+                        return '<em><a href="#' + this.value + '">' + this.value + '</a></em>';      
+                    	return '<span class="current">' + this.value + '</span>';      
+                case 'left':      
+                case 'right':      
+      
+                        if (!this.active)      
+                                return '';      
+                        else       
+                                return '<em><a href="#' + this.value + '">' + this.value + '</a></em>';      
+      
+                case 'next':      
+      
+                        if (this.active) {      
+                                return '<a href="#' + this.value + '" class="next">Next &raquo;</a>';      
+                        }      
+                        return '<span class="disabled">Next &raquo;</span>';      
+      
+                case 'prev':      
+      
+                        if (this.active) {      
+                                return '<a href="#' + this.value + '" class="prev">&laquo; Previous</a>';      
+                        }      
+                        return '<span class="disabled">&laquo; Previous</span>';      
+      
+                case 'first':      
+      
+                        if (this.active) {      
+                                return '<a href="#' + this.value + '" class="first">|&lsaquo;</a>';      
+                        }      
+                        return '<span class="disabled">|&lsaquo;</span>';      
+      
+                case 'last':      
+      
+                        if (this.active) {      
+                                return '<a href="#' + this.value + '" class="prev">&rsaquo;|</a>';      
+                        }      
+                        return '<span class="disabled">&rsaquo;|</span>';      
+      
+                case 'fill':      
+                        if (this.active) {      
+                                return "...";      
+                        }      
+                }      
+        }
     }); 	
 	
 }
 
+function loadHeatmapPaginator(divID, analysisId, page) {
 
-//Open and close the SA heatmap for a given analysis
-function toggleHeatmapSA(analysisId, page)	{	
-	
-	var expanded = jQuery("#selectedAnalysis_" + analysisId).data("expanded");
-
-	var imgExpand = "#saimgExpand_"  + analysisId;
-
-	// when not expanded, has a down arrow
-	// when expanded has an up arrow
-	// replace with the other on toggle
-    if (expanded)  {
-    	// unexpand
-    	jQuery(imgExpand).attr('src', './../images/down_arrow_small2.png');
-    	jQuery("#analysis_holderSA_" + analysisId).slideUp(200);
-    	jQuery("#selectedAnalysis_" + analysisId).data("expanded", false);
-    	
-    	jQuery("#selectedAnalysis_" + analysisId).removeClass("SA-item-expanded");
-    }
-    else  {
-    	// expand
-    	jQuery(imgExpand).attr('src', './../images/up_arrow_small2.png');
-    	jQuery("#analysis_holderSA_" + analysisId).slideDown(200);
-    	jQuery("#selectedAnalysis_" + analysisId).data("expanded", true);
-    	
-    	jQuery("#selectedAnalysis_" + analysisId).addClass("SA-item-expanded");
-    	
-    	var hmLoaded = jQuery("#selectedAnalysis_" + analysisId).data("hmLoaded");
-    	
-    	// if we don't have a heatmap laoded yet, then load one
-    	if (!hmLoaded)  {
-    		loadHeatmapSA(analysisId, page);
-    		jQuery("#selectedAnalysis_" + analysisId).data("hmLoaded", true);
-    	}
-    	
-    }
-	return false;
-}
-
-
-// load the Selected Analyses heatmap (the one that shows underneath the analysis on the CTA page)
-function loadHeatmapSA(analysisId, page) {
-	// generate a keyword list that can be consumed by the server; needs to be in form:
-	// GENELIST:1|2|3&GENESIG:4|5&PATHWAY:6|7&GENE:8|9&PROTEIN:10|11
-
-	// retrieve the current state of the checkbox
-	var cbState =  jQuery("input[name=showGenes_" + analysisId + "]:checked").val();
-	
-	// retrieve the old value of the checkbox
-	var oldState = jQuery("#selectedAnalysis_" + analysisId).data("cbState");
-
-	var hmLoaded = jQuery("#selectedAnalysis_" + analysisId).data("hmLoaded");
-	
-	// nothing changed and a heatmap is loaded, don't load anything
-    if (oldState == cbState && hmLoaded)  {
-    	return false;
-    }
-    else {
-		
-		var queryString;
-		var divID = 'heatmapSA_' + analysisId;
-		
-    	if (cbState == 'ALLSIG')  {
-    		// load with no keyword filters
-    		queryString = '';
-    	}
-    	else  {
-			var params = new Array
-			var geneList = new Array
-			var geneSig = new Array
-			var pathway = new Array
-			var gene = new Array
-			var protein = new Array
-			
-			// loop through each xt keyword and add to the appropriate array based on its category
-			for (var i=0; i<xtSelectedKeywords.length; i++)  {
-				var kw = xtSelectedKeywords[i];
-				switch (kw.categoryId)
-				{ 
-					case 'GENELIST':  geneList.push(kw.id);  break;
-					case 'GENESIG':   geneSig.push(kw.id); break;
-					case 'PATHWAY':   pathway.push(kw.id); break;
-					case 'GENE':      gene.push(kw.id); break;
-					case 'PROTEIN':   protein.push(kw.id); break;
-				    default: alert('Invalid category: ' + kw.categoryId); return false;
-				}				
-			}
-			
-			// if a category has items, join it's items with a pipe and add to params array
-			if (geneList.length>0)  {params.push('GENELIST:' + geneList.join('|'))}
-			if (geneSig.length>0)  	{params.push('GENESIG:' + geneSig.join('|'))}
-			if (pathway.length>0)  	{params.push('PATHWAY:' + pathway.join('|'))}
-			if (gene.length>0)  	{params.push('GENE:' + gene.join('|'))}
-			if (protein.length>0)  	{params.push('PROTEIN:' + protein.join('|'))}
-			
-			queryString = params.join('&');
-    	}
-    	
-    	// save the new state of checkbox
-    	jQuery("#selectedAnalysis_" + analysisId).data("cbState", cbState);
- 
-    	jQuery("#analysis_holderSA_" + analysisId).mask('Loading...');
-		loadHeatmapPaginator(divID, analysisId, page, true, queryString);
-    }
-}
-
-
-// keywords only necessary for cta version of this heatmap (session variables generated during facet results are used for standard heatmap)
-function loadHeatmapPaginator(divID, analysisId, page, isSA, keywordsQueryString) {
-
-	var analysisIndex;
-	
-	if (isSA)  {		
-		analysisIndex = getAnalysisIndexSA(analysisId);
-	}
-	else  {		
-		analysisIndex = getAnalysisIndex(analysisId);
-	}
+	var analysisIndex = getAnalysisIndex(analysisId);
 		
 	rwgAJAXManager.add({
 		url:getHeatmapNumberProbesURL,		
-		data: {id: analysisId, page:page, isSA:isSA, keywordsQueryString:keywordsQueryString},
-		success: function(response) {								
+		data: {id: analysisId, page:page},
+		success: function(response) {
 			var maxProbeIndex = response['maxProbeIndex']
 			
-			var errorMsg = response['errorMsg'];
-			
-			if (errorMsg != '')  {
-				alert(errorMsg);
-			}
-			
-			var saPrefix ='';
-			if (isSA)  {
-				saPrefix ='sa';
-			}
-			
-			if (maxProbeIndex == 0)  {
-				jQuery("#" + divID).html('No Data');
-				jQuery("#" + saPrefix + "pagination_" + analysisId).empty();
-		    	jQuery("#analysis_holderSA_" + analysisId).unmask();
-
-			}
-			else {
-				getHeatmapPaginator(divID, analysisId, analysisIndex, maxProbeIndex, isSA, keywordsQueryString);
-			}
+			getHeatmapPaginator(divID, analysisId, analysisIndex, maxProbeIndex, page);
 	
 		},
 		error: function(xhr) {
@@ -3058,1321 +2561,94 @@ function loadHeatmapPaginator(divID, analysisId, page, isSA, keywordsQueryString
 	});
 }
 
-
-function showCrossTrialAnalysis()
-{
-	
-	
-	
-	if(xtSelectionUpdated){
-		updateCrossTrialGeneCharts();
+function updateSelectedAnalyses() {
+	var selectedboxes = jQuery(".analysischeckbox:checked");
+	if (selectedboxes.length > 0) {
+		jQuery('#selectedAnalyses').html("<b>(" + selectedboxes.length + "</b> analyses selected)");
 	}
-	
-	menuIconSwap("imgCTA");
-	
-	//reset scroll position
-	jQuery("#main").scrollTop(0);
-	
-	//hide the unused menu options
-	jQuery("#toolbar-collapse_all").hide();
-	jQuery("#toolbar-options").hide();
-	
-	hideHomePage();
-	hideResultsPage();
-	jQuery('#cross-trial-div').show();
-	
-	
-	  
-	  //if no analyses are selected, disable everything
-	  if(selectedAnalyses.length ==0){
-		  
-		  jQuery('#xtAnalysisList').hide();
-		  jQuery('#xtMenuBar').hide();
-		  jQuery('#xtSearch-ac').prop('disabled', true);
-		  
-		  jQuery('#xtNoAnalysesMsg').show();
-	  
-	  }else{//otherwise, show everything
-		  
-		  jQuery('#xtAnalysisList').show();
-		  jQuery('#xtMenuBar').show();
-		  jQuery('#xtSearch-ac').prop('disabled', false);
-		  
-		  jQuery('#xtNoAnalysesMsg').hide();
-	  }
-	
-	setSaveXTFilterLink();
-	setClearXTLink();
-	displayxtAnalysesList();
-	  
-}
-
-
-function loadCrossTrialAnalysisInitial(){
-    rwgAJAXManager.add({
-		url:crossTrialAnalysisURL,				
-		timeout:60000,
-		success: function(response) {
-		  
-		  jQuery('#cross-trial-div').html(response);
-		  
-		},
-		error: function(xhr) {
-			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
-		}
-	});
-}
-
-
-function launchHomePage(currentsubcategoryid, currentcharttype, showAll)
-{
-      
-      rwgAJAXManager.add({
-  		url:homeURL,						
-  		data: {currentsubcategoryid: currentsubcategoryid, currentcharttype:currentcharttype, showAll:showAll},
-  		timeout:60000,
-  		success: function(response) {
-  			//jQuery(div).empty();
-  		  jQuery('#home-div').html(response);
-  		  showHomePage();
-  	      hideResultsPage();
-  	      hideCrossTrialAnalysis();
-  		}
-  	});
-      
-    
-}
-function showHomePage()
-{
-	menuIconSwap("imgHome");
-	
-	//reset scroll position
-	jQuery("#main").scrollTop(0);
-	
-	//hide the unused menu options
-	jQuery("#toolbar-collapse_all").hide();
-	jQuery("#toolbar-options").hide();
-	
-      jQuery('#home-div').show();
-      hideCrossTrialAnalysis();
-      hideResultsPage();
-}
-function showResultsPage()
-{
-	//replace image
-	menuIconSwap("imgResults");
-	
-	//reset scroll position
-	jQuery("#main").scrollTop(0);
-	
-	//show the extra menu options
-	jQuery("#toolbar-collapse_all").show();
-	jQuery("#toolbar-options").show();
-	jQuery('#results-div').show();
-	 hideCrossTrialAnalysis();
-	 hideHomePage();
-}
-function hideResultsPage()
-{
-	jQuery('#results-div').hide();
-}
-function hideHomePage()
-{
-      jQuery('#home-div').hide();      
-}
-function hideCrossTrialAnalysis(){
-	jQuery('#cross-trial-div').hide();
-}
-
-//swap out the black and white icon with the color icon
-//reset all other icons to b/w
-function menuIconSwap(current){
-	//current options: imgHome imgResults imgCTA
-	
-	//reset all icons to b/w version
-	var src = jQuery("#imgHome").attr('src').replace('menu_icon_home.png', 'menu_icon_home_bw.png');	
-	jQuery("#imgHome").attr('src',src);
-	
-	var src = jQuery("#imgResults").attr('src').replace('menu_icon_search.png', 'menu_icon_search_bw.png');	
-	jQuery("#imgResults").attr('src',src);
-	
-	var src = jQuery("#imgCTA").attr('src').replace('menu_icon_crosstrial.png', 'menu_icon_crosstrial_bw.png');	
-	jQuery("#imgCTA").attr('src',src);
-	
-	//set the current one to the color version
-	switch(current)
-	{
-	case "imgHome":
-		var src = jQuery("#imgHome").attr('src').replace('menu_icon_home_bw.png', 'menu_icon_home.png');	
-		jQuery("#imgHome").attr('src',src);
-		break;
-	case "imgResults":
-		var src = jQuery("#imgResults").attr('src').replace('menu_icon_search_bw.png', 'menu_icon_search.png');	
-		jQuery("#imgResults").attr('src',src);
-		break;
-	  break;
-	case "imgCTA":
-		var src = jQuery("#imgCTA").attr('src').replace('menu_icon_crosstrial_bw.png', 'menu_icon_crosstrial.png');	
-		jQuery("#imgCTA").attr('src',src);
-		break;
-	}
-	
-	
-}
-
-function getPieChartData(divid, catid, ddid, drillback, charttype, parentcolor, ddstack)
-{
-	rwgAJAXManager.add({
-		url:getPieChartDataURL,									
-		data: {catid: catid, ddid: ddid, drillback: drillback, charttype: charttype},
-		timeout:60000,
-		success: function(response) {
-			jQuery("#"+divid).empty();
-			drawPieChart(divid, catid, response.ddid, response.data, charttype, parentcolor, ddstack);
-		}
-	});
-}
-
-
-function displaySelectedAnalysisTopGenes(){
-	
-	for (var i =0; i < selectedAnalyses.length; i++){
-		
-		getTopGenes(selectedAnalyses[i].id);
-		
+	else {
+		jQuery('#selectedAnalyses').html("&nbsp;");
 	}
 }
 
-
-
-
-function getCrossTrialSummaryTableStats()
-{
-	 jQuery('#xtSummaryTable').html('<br /><p>Summary Table Loading...</p><br /><br />');
-	
-	
-	if (selectedAnalyses.length == 0)  {
-		return;
+function startPlotter() {
+	var selectedboxes = jQuery(".analysischeckbox:checked");
+	if (selectedboxes.length == 0) {
+		alert("No analyses are selected! Please select analyses to plot.");
 	}
-
-	var analysisList = '';
-	
-	//Convert the selected analysis array into a list
-	for (var i =0; i < selectedAnalyses.length; i++){
-
-		analysisList += selectedAnalyses[i].id;
-		
-		if (selectedAnalyses.length-1 > i){
-			analysisList += ',';
+	else {
+		var analysisIds = "";
+		analysisIds += jQuery(selectedboxes[0]).attr('name');
+		for (var i = 1; i < selectedboxes.length; i++) {
+			analysisIds += "," + jQuery(selectedboxes[i]).attr('name');
 		}
 		
+		var snpSource = jQuery('#plotSnpSource').val();
+		var geneSource = jQuery('#plotGeneSource').val();
+		var pvalueCutoff = jQuery('#plotPvalueCutoff').val();
+		
+		window.location = webStartURL + "?analysisIds=" + analysisIds + "&snpSource=" + snpSource + "&geneSource=GRCh37&pvalueCutoff=" + pvalueCutoff;
+		jQuery('#divPlotOptions').dialog("destroy");
 	}
+}
 
-	rwgAJAXManager.add({
-		url:getCrossTrialSummaryTableStatsURL,
-		data: {analysisList: analysisList},
-		timeout:60000,
-		success: function(data) {
-			
-			 var tbl = "<div><table style='width:620px' id='CTAsummaryTable' class='CTAtable'>";
-			 tbl+="<tr><th style='text-align:center'>Analysis</th style='text-align:center'>" +
-			 		"<th style='text-align:center'>Genes Up Regulated</th>" +
-			 		"<th style='text-align:center'>Genes Down Regulated</th>" +
-			 		"<th style='text-align:center'>Total Genes</th></tr>";
-		     
-			jQuery.each(selectedAnalyses, function(k,v){
-				
-					var idx = k+1;
-	        		var analysisResult = jQuery.grep(data, function(e){ return e.bio_assay_analysis_id == v.id; });
-	        		
-	        		tbl += "<tr><td style='text-align:left'><span class=truncated title='" +v.studyID +": "+v.title +"'>";
-	        		tbl += "<span style='font-weight:bold'>"+idx +": </span>";
-	        		tbl += v.studyID +": "+v.title +"</span></td>";	
-
-	        		tbl += "<td style='text-align:center'>"+analysisResult[0].upreg+"</td>";	
-	        		tbl += "<td style='text-align:center'>"+analysisResult[0].downreg+"</td>";	
-	        		tbl += "<td style='text-align:center'>"+analysisResult[0].total+"</td>";	
-		            
-	        		tbl += "</tr>";    
+function openPlotOptions() {
+	var selectedboxes = jQuery(".analysischeckbox:checked");
+	if (selectedboxes.length == 0) {
+		alert("No analyses are selected! Please select analyses to plot.");
+	}
+	else {
+		jQuery('#divPlotOptions').dialog("destroy");
+		jQuery('#divPlotOptions').dialog(
+			{
+				modal: false,
+				height: 250,
+				width: 400,
+				title: "Manhattan Plot Options",
+				show: 'fade',
+				hide: 'fade',
+				resizable: false,
+				buttons: {"Plot" : startPlotter}
 			});
-			
-				tbl += '</table></div>';
-			 
-			    jQuery('#xtSummaryTable').html(tbl);
-			    
-			    
-			    //alternate colors
-			    jQuery('#CTAsummaryTable').find('tr:even').css({'background-color':'#efefef'})
-	              .end().find('tr:odd').css({'background-color':'#fff'});		   
-		}
-	});
-	
-}
-
-
-function getTopGenes(analysisID)
-{
-
-	rwgAJAXManager.add({
-		url:getTopGenesURL,
-		data: {analysisID: analysisID},
-		timeout:60000,
-		success: function(data) {
-			
-			//alert(response[key]['bio_marker_id']);
-			 var tbl_body = "<div><table style='width:230px'>";
-			 jQuery.each(data, function() {
-			        var tbl_row = "";
-			        jQuery.each(this, function(k , v) {
-			            tbl_row += "<td>"+v+"</td>";
-			        })
-			        tbl_body += "<tr>"+tbl_row+"</tr>";                 
-			    })
-			    tbl_body += '</table></div>';
-			    jQuery('#xtTopGenes').after(tbl_body);
-		   
-		}
-	});
-	
-}
-
-
-function updateCrossTrialGeneCharts(){
-	
-	//update the table
-	getCrossTrialSummaryTableStats()
-	
-	jQuery("#xtMenuBar").unmask();
-	jQuery('#xtMsgBox').fadeOut(200);
-	
-	//unmaks the tabs
-//	jQuery('#xtMenuBar').unmask()
-	
-	//clear gene charts
-	jQuery('#xtSummaryChartArea').html('');
-	
-	//cleart the heatmaps
-	jQuery('#xtCTAHeatmapArea').html('');
-	
-	jQuery(xtSelectedKeywords).each(function (index, value){
-		
-		var categoryId = xtSelectedKeywords[index].categoryId;
-		var keywordId = xtSelectedKeywords[index].id;
-		var searchTerm = xtSelectedKeywords[index].termName;
-
-		switch (categoryId)  {
-			case "GENE": 
-			case "PROTEIN":
-				getCrossTrialGeneSummary(keywordId);
-				break;
-			case "GENELIST": 
-			case "GENESIG": 
-			case "PATHWAY":
-				loadHeatmapCTAPaginator(categoryId, keywordId, 1, searchTerm);
-				break;
-			default:  
-				alert("Invalid category!");
-		}
-				
-	});
-	
-	
-	//check if the cross-trial div is currently displayed. Only perform these actions if so
-	if(jQuery('#cross-trial-div').css('display') != 'none'){
-		
-		setSaveXTFilterLink();
-		setClearXTLink();
-		displayxtAnalysesList();
 	}
-
-
 }
 
-function closeCTAheatmap(divID, geneID){
+function updateAnalysisData(analysisId, full) {
+	jQuery('#partialanalysiswarning').hide();
+	jQuery('#analysisgenefilteredwarning').hide();
 	
-	jQuery('#' +divID).fadeOut(200, function() { 
-		jQuery('#' +divID).remove(); 
-		
-	});
-	
-	//loop through the array, find the gene ID to be removed, and remove it from the array
-	for (var i =0; i < xtSelectedKeywords.length; i++){
-	   if (xtSelectedKeywords[i].id == geneID) {
-		   xtSelectedKeywords.splice(i,1);
-	   }
-	}
-	
-	setSaveXTFilterLink();
-	setClearXTLink();	
-	
-
-	if(xtSelectedKeywords.filter(function(el){return el.categoryId != 'GENE';}).length==0){
-		jQuery('#xtNoHeatmapsMsg').fadeIn(200);
-	}
-	
-	// clear out and redraw the analyses list
-	displayxtAnalysesList();	
-
-		
-}
-
-
-
-function closeXTGeneChart(divID, geneID){
-	
-	jQuery('#' +divID).fadeOut(200, function() { 
-		jQuery('#' +divID).remove(); 
-		
-	});
-	
-	//loop through the array, find the gene ID to be removed, and remove it from the array
-	for (var i =0; i < xtSelectedKeywords.length; i++){
-	   if (xtSelectedKeywords[i].id == geneID) {
-		   xtSelectedKeywords.splice(i,1);
-	      break;
-	   }
-	}
-
-	setSaveXTFilterLink();
-	setClearXTLink();		
-	
-	
-	if(xtSelectedKeywords.filter(function(el){return el.categoryId == 'GENE';}).length==0){
-		jQuery('#xtNoGenesMsg').fadeIn(200);
-	}
-
-	// clear out and redraw the analyses list
-	displayxtAnalysesList();	
-	
-}
-
-function clearAllXTSearchTerms(){
-	
-	//Clear the html div of existing charts
-	jQuery('#xtSummaryChartArea').html('');
-	
-	//Clear the heatmaps
-	jQuery('#xtCTAHeatmapArea').html('');
-	
-	//reset the array
-	xtSelectedKeywords = [];
-	
-	//remove the message box
-	jQuery('#xtMsgBox').fadeOut(200);
-	
-	//remove the mask
-	jQuery('#xtMenuBar').unmask();
-	
-	//show the empty gene msg box
-	jQuery('#xtNoGenesMsg').show();
-	jQuery('#xtNoHeatmapsMsg').show();
-	
-	setClearXTLink();
-	setSaveXTFilterLink();
-
-	// clear out and redraw the analyses list
-	displayxtAnalysesList();	
-
-	
-}
-
-
-//used on the cross trial analysis page to display the summary
-function displayxtAnalysesList(){
-	
-	
-	var html = "<div id='xtSelectedAnalysesListLegend'>";
-	
-	jQuery(selectedAnalyses).each(function(index, value){
-		
-		var num = parseInt(index) + 1;
-
-		html = html + "<div class='xtSelectedAnalysesListLegendItem' onclick='toggleHeatmapSA(" + selectedAnalyses[index].id + ", 1);' id='selectedAnalysis_"+selectedAnalyses[index].id +"'>";
-		html = html + "<table><tr><td class='analysisNum'>" +num  +"</td><td style='padding-left:4px'><span style='padding-left:0' class='result-trial-name'>"+ selectedAnalyses[index].studyID +'</span>: ' +selectedAnalyses[index].title.replace(/_/g, ', ');
-		html = html + "</td><td style='text-align:right'><img alt='expand/collapse' id='saimgExpand_" + selectedAnalyses[index].id + "' src='./../images/down_arrow_small2.png' style='padding-left:10px; padding-right:10px;'/></td></tr>";
-		html = html + '</table></div>';
-		html = html + "<div id='analysis_holderSA_" + selectedAnalyses[index].id + "' class='xtSAHeatmapHolder'>"; 
-		html = html + "<div class='legend' id='saheatmapLegend_" + selectedAnalyses[index].id + "'></div>";
-		
-		
-		
-		var allSigChecked = '';
-		var selectedChecked = '';
-		var selectedDisabled = '';
-		if (xtSelectedKeywords.length > 0)  {
-			selectedChecked = 'checked';
-		}
-		else  {
-			allSigChecked = 'checked';
-			selectedDisabled = 'disabled'
-		}
-		
-		var onclick = "loadHeatmapSA(" +  selectedAnalyses[index].id + ", 1);" 
-		html += "<form><div class='xtHeatmapRadioBtns' id='HeatmapRadio_" +selectedAnalyses[index].id +"'>"
-		
-		html += "<input onclick='" + onclick + "' type='radio' id='showAllGenes_" + selectedAnalyses[index].id + "' name='showGenes_" + selectedAnalyses[index].id + "' value='ALLSIG' " + allSigChecked + " />"
-		html += "<label for='showAllGenes_" + selectedAnalyses[index].id + "'> Show All Significant Genes</label>"
-		html += "<input onclick='" + onclick + "' type='radio' id='showSelectedGenes_" + selectedAnalyses[index].id + "' name='showGenes_" + selectedAnalyses[index].id + "' value='SELECTED' " + selectedChecked + " " + selectedDisabled + " />"
-		html += "<label for='showSelectedGenes_" + selectedAnalyses[index].id + "'>Show Selected Genes</label></div>"
-					
-		html += "<div class='heatmap-SA-Holder' id='heatmapSA_" + selectedAnalyses[index].id + "'></div>";
-		html += "<div class='pagination' id='sapagination_" + selectedAnalyses[index].id + "'></div>";
-		
-		html += "</div></form>";
-	});
-	
-	html = html + '</div>';
-	
-	jQuery('#xtSummary_AnalysesList').html(html);
-	
-	
-    jQuery(".xtHeatmapRadioBtns").buttonset();
-
-
-	// store the state of each div 
-	jQuery(selectedAnalyses).each(function(index, value){
-		jQuery("#selectedAnalysis_" + selectedAnalyses[index].id).data("expanded", false);
-		jQuery("#selectedAnalysis_" + selectedAnalyses[index].id).data("hmLoaded", false);
-		
-		// retrieve the current value of check box
-		var cbState =  jQuery("input[name=showGenes_" + selectedAnalyses[index].id + "]:checked").val();
-		
-		// save the state of cb
-		jQuery("#selectedAnalysis_" + selectedAnalyses[index].id).data("cbState", cbState);
-	});
-	
-	
-}
-
-
-
-
-function createCrossTrialSummaryChart(data, pdata, pdataOriginal, keyword_id, placeholder){
-
-	// format data for use in tooltips
-	var formattedData = [];
-	for (var i=0; i<data.length; i++)  {
-		var fc = data[i];
-		var log10pv = pdata[i];
-		var pv = pdataOriginal[i];
-		
-		fc = (fc == '') ? '' : fc.toFixed(5);
-		log10pv = (log10pv == '') ? '' : log10pv.toFixed(5);
-		pv = (pv == '') ? '' : pv.toFixed(5);
-
-		formattedData[i] = {foldChange:fc, log10pvalue:log10pv, pvalue:pv}
-	}
-	
-	
-	//use jsfiddle to test: http://jsfiddle.net/HZ9dg/6/
-	
-	var keywordObject = xtSelectedKeywords.filter(function(el){return el.id == keyword_id});
-	
-	var geneName = keywordObject[0].termName;
-	var geneID = keywordObject[0].id;
-	var divID = "xtSummaryChart_" +geneID;
-	
-	//html for button to close the graph
-	var closeHTML = "<a href='#' class='xtChartClostbtn' id='" +divID  +"_CloseBtn' onclick=\"closeXTGeneChart('" +divID +"'," +geneID +")\">x</a>";
-	
-	var openBoxplotLinkHTML = "<a href='#' class='xtBoxplotbtn' id='" +divID  +"_BoxplotBtn' onclick=\"openXtBoxplot('"+keyword_id +"', '" +geneName +"')\">view boxplot</a>";
-
-    var margin = {top: 30, right: 40, bottom: 10, left: 50},
-        bar_width = 30,
-        width = ((data.length) * (bar_width + 10)),
-        height = 150- margin.top - margin.bottom;
-
-    var y0 = Math.max(Math.max(-d3.min(data), d3.max(data)),3);
-    var y2max = Math.max(d3.max(pdata),3);
-
-    //ensure the y0 and y2max both have valid values (this is to correct in cases where the dataset is all null)
-    if(!y0>0){ y0=3;}
-    if(!y2max>0){ y2max=3;}
-    
-    var y = d3.scale.linear()
-        .domain([-y0, y0])
-        .range([height,0])
-        .nice();
-
-    var y2 = d3.scale.linear()
-        .domain([0, y2max])
-        .range([height/2,0])
-        .nice();
-
-
-    var yAxis = d3.svg.axis()
-        .scale(y)
-        .ticks(5)
-        .orient("left");
-
-    var yAxis2 = d3.svg.axis()
-        .scale(y2)
-        .ticks(4)	
-        .orient("right");
-    
-    
-    //remove the div if it already exists:
-    jQuery('#'+divID).remove();
-    
-    //create div to hold svg chart
-    jQuery("#xtSummaryChartArea").prepend("<div id='"+divID +"' class='xtSummaryChart'></div>");
-    
-    
-    //only show the close btn on hover
-    jQuery('#'+divID).hover(
-    		  function () {
-    			 jQuery('#' +divID  +'_CloseBtn').show();
-    			 jQuery('#' +divID  +'_BoxplotBtn').show();
-    		  },
-    		  function () {
-    			 jQuery('#' +divID  +'_CloseBtn').hide();
-    			 jQuery('#' +divID  +'_BoxplotBtn').hide();
-    		  }
-    		);
-    
-    var svg = d3.select('#'+divID).append("svg")
-        .attr("width", width + margin.left + margin.right)
-        .attr("height", height + margin.top + margin.bottom)
-        .attr("class", 'xtSVGSummaryChart')
-      .append("g")
-        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-
-    svg.selectAll(".bar")
-        .data(data)
-      .enter().append("rect")
-        .attr("class", function(d) { return d < 0 ? "geneChartTooltip bar negative" : "geneChartTooltip bar positive"; })
-                        //5 is the left padding, 10 is the padding between each bar
-        .attr("x", function(d,i) { return 5 + i * (bar_width+10); })
-        .attr("y", function(d,i) { return y(Math.max(0, d)); })
-        .attr("height", function(d) { return Math.abs(y(0) - y(0-d));})
-        .attr("width", bar_width)
-	    .attr("id", function(d, i) {
-		    	var id = "gcBarTooltip" + uniqueGeneChartId++;   // id here will match id in tooltip array
-				var tooltip = 
-		    				   "<table>" +
-		    				   "<tr><td width='100px'><b>Index</b></td><td>" + (i + 1) + "</td></tr>" +
-		    				   "<tr><td><b>Study</b></td><td>" + selectedAnalyses[i].studyID + "</td></tr>" +
-		    				   "<tr><td ><b>Analysis</b></td><td>" + selectedAnalyses[i].title + "</td></tr>" + 
-		    				   "<tr><td ><b>-log10(pvalue)</b></td><td>" + formattedData[i].log10pvalue + "</td></tr>"  +
-		    				   "<tr><td ><b>pvalue</b></td><td>" + formattedData[i].pvalue + "</td></tr>"  +
-		    				   "<tr><td ><b>Fold Change</b></td><td>" + formattedData[i].foldChange + "</td></tr>" 
-		    				   "</table>";
-		    	
-		    	gcTooltips[id] = tooltip;
-		    	return id;
-	  })		
-    ;
-       
-
-
-    svg.selectAll(".bar2")
-        .data(pdata)
-        .enter().append("rect")
-       // .attr("class", function(d) { return d < 0 ? "bar negative" : "bar positive"; })
-        .attr("x", function(d,i) { return bar_width/2 +2 + i * (bar_width+10); })
-        .attr("y", function(d,i) { return y2(Math.max(0, d)); })
-        .attr("height", function(d) { return Math.abs(y2(0) - y2(0-d)); })
-        .attr("width", 4)
-        .attr("class", "geneChartTooltip")
-	    .attr("id", function(d, i) {
-		    	var id = "gcBar2Tooltip" + uniqueGeneChartId++;   // id here will match id in tooltip array
-				var tooltip = 
-		    				   "<table>" +
-		    				   "<tr><td width='100px'><b>Index</b></td><td>" + (i + 1) + "</td></tr>" +
-		    				   "<tr><td><b>Study</b></td><td>" + selectedAnalyses[i].studyID + "</td></tr>" +
-		    				   "<tr><td ><b>Analysis</b></td><td>" + selectedAnalyses[i].title + "</td></tr>" + 
-		    				   "<tr><td ><b>-log10(pvalue)</b></td><td>" + formattedData[i].log10pvalue + "</td></tr>"  +
-		    				   "<tr><td ><b>pvalue</b></td><td>" + formattedData[i].pvalue + "</td></tr>"  +
-		    				   "<tr><td ><b>Fold Change</b></td><td>" + formattedData[i].foldChange + "</td></tr>" 
-		    				   "</table>";
-		    	
-		    	gcTooltips[id] = tooltip;
-		    	return id;
-	  })		
-        ;
-
-    //line to show the p-value < 0.05 cut-off
-    svg.append("svg:line")
-    .attr("x1", 10)
-    .attr("y1", function() { return y2(1.3); })
-    .attr("x2", width)
-    .attr("y2", function() { return y2(1.3); })
-    .attr("class", 'pvalue-cutoff-line');
-
-svg.selectAll("text")
-       .data(data)
-       .enter()
-       .append("text")
-       .text(function(d,i) {return i+1;})
-       .attr("x", function(d,i) { return bar_width/2 +2 + i * (bar_width+10); })
-      // .attr("y", function(d,i) { return y(Math.max(0, d)); })
-      // .attr("y", function(d) { return d < 0 ? height/2-5 : height/2+10; })
-       .attr("y", function(d) { return height +10 })
-       .attr("font-family", "sans-serif")
-       .attr("font-size", "10px")
-       .attr("fill", "black")
-       .attr("cursor","default")
-       .attr("class", "geneChartTooltip")
-	   .attr("id", function(d, i) {
-		    	var id = "gcTitle" + uniqueGeneChartId++;   // id here will match id in tooltip array
-				var tooltip = 
-		    				   "<table>" +
-		    				   "<tr><td width='100px'><b>Index</b></td><td>" + (i + 1) + "</td></tr>" +
-		    				   "<tr><td><b>Study</b></td><td>" + selectedAnalyses[i].studyID + "</td></tr>" +
-		    				   "<tr><td ><b>Analysis</b></td><td>" + selectedAnalyses[i].title + "</td></tr>" 
-		    				   "</table>";
-		    	
-		    	gcTooltips[id] = tooltip;
-		    	return id;
-	  })		
-    ;
-
-	svg.append("line")
-		.attr("x1", 50)
-		.attr("y1", function() { return  0})
-		.attr("x2", 100)
-		.attr("y2", function() { return  2 });
-
-
-        // add Title
-        svg.append("svg:text")
-          .attr("x", 8)
-          .attr("y", -5)
-          .attr("class","xtBarPlotGeneTitle")
-          .text(geneName);
-
-        // y1 legend
-        svg.append("text")
-            .attr("class", "y-label")
-            .attr("text-anchor", "end")
-            .attr("y", -30)
-            .attr("x",-height/4)
-            .attr("transform", "rotate(-90)")
-            .text("fold change");
-        // y2 legend
-        svg.append("text")
-            .attr("class", "y-label")
-            .attr("text-anchor", "end")
-            .attr("y", width+35)
-            .attr("x", 0)
-            .attr("transform", "rotate(-90)")
-            .text("-log10(p-value)");
-
-
-    svg.append("g")
-        .attr("class", "y axis")
-        .call(yAxis);
-
-    svg.append("g")
-        .attr("class", "y axis")
-        .attr("transform", "translate(" +(width) +",0)")
-        .call(yAxis2);
-
-    svg.append("g")
-        .attr("class", "x axis")
-      .append("line")
-        .attr("y1", y(0))
-        .attr("y2", y(0))
-        .attr("x1", 0)
-        .attr("x2", width);
-    
-    //only check for no data and display label after the data has been received
-    if(!placeholder){
-	    var noDataFontSize = 10;
-	    svg.selectAll(".noDataText1")
-	    .data(data)
-	    .enter().append("text")
-	    .text("No")
-	    .attr("style", function(d, i) {
-	    	if (formattedData[i].pvalue == '' && formattedData[i].foldChange == '')  {
-	    		return "display:inline";	
-	    	}
-	    	else {
-	    		return "display:none";
-	    	}
-	    	
-	   	}
-	    )
-	    .style("font-size", noDataFontSize)
-	    .attr("x", function(d,i) { return 5 + i * (bar_width+10) + 2; })
-	    .attr("y", function(d,i) { return 42; })
-	    .attr("class", "noDataText1")
-	    ;
-	    
-	    svg.selectAll(".noDataText2")
-	    .data(data)
-	    .enter().append("text")
-	    .text("Data")
-	    .attr("style", function(d, i) {
-	    	if (formattedData[i].pvalue == '' && formattedData[i].foldChange == '')  {
-	    		return "display:inline";	
-	    	}
-	    	else {
-	    		return "display:none";
-	    	}
-	    	
-	   	}
-	    )
-	    .style("font-size", noDataFontSize)
-	    .attr("x", function(d,i) { return 5 + i * (bar_width+10); })
-	    .attr("y", function(d,i) { return 53; })
-	    .attr("class", "noDataText2")
-	    ;        
-    }
-    
-    //add some buttons
-    jQuery('#'+divID).append(closeHTML +"<span style='display:block'>"+openBoxplotLinkHTML+"</span>");
-    
-    //if placeholder is true, then we are drawing the graph with no data simply to use as a placeholder
-    if(placeholder){
-    	jQuery('#'+divID).mask("Loading...");//add loading screen
-    }else
-	{
-    	jQuery('#'+divID).unmask();//remove loading screen
-	}
-    
-    registerGeneChartTooltipEvents();
-   
-}
-
-this.registerGeneChartTooltipEvents = function(){
-	// create the method for the hover event for tooltips on the favorites for faceted searches
-	jQuery(".geneChartTooltip").hoverIntent(
-		{
-			over:function(e){
-				//var elementId = e.currentTarget.id;
-				showGeneChartTooltip(e);
-			},
-			out: function(){
-				jQuery("#geneChartTooltip").remove();
-			},
-			interval:200
-		});
-	
-};
-
-function showGeneChartTooltip(e)  {
-
-	var xOffset;
-	var yOffset;		
-	
-	// create the div tag which will hold tooltip
-	jQuery("body").append("<div id='geneChartTooltip'></div>");
-	
-	var tooltip = gcTooltips[e.currentTarget.id];
-	
-	jQuery("#geneChartTooltip")
-		.css("z-index", 10000)
-		.html(tooltip)
-		.fadeIn(200)
-		;
-
-	var offsets = getTooltipOffset(e, "geneChartTooltip");	
-	
-	xOffset = offsets.xOffset;
-	yOffset = offsets.yOffset;
-	
-	jQuery("#geneChartTooltip")
-	.css("left",(e.pageX + xOffset) + "px")
-	.css("top",(e.pageY - yOffset) + "px")
-	;
-	
-}
-
-
-/*
-jQuery.ui.dialog.prototype._makeDraggable = function() { 
-    this.uiDialog.draggable({
-        containment: false
-    });
-};*/
-
-function getCrossTrialGeneSummary(search_keyword_id)
-{
-	
-	var foldchangeDataset = [];
-	var pvalueDataset =[];  // - log10 pvalue
-	var pvalueOriginalDataset =[];  // pvalues
-	var analysisList = '';
-	
-	//hide the "empty" gene message
-	
-	jQuery('#xtNoGenesMsg').hide();
-	
-	
-	//Convert the selected analysis array into a list
-	for (var i =0; i < selectedAnalyses.length; i++){
-		
-		//add place holder data so that when the chart is drawn without data, it is the correct size
-		foldchangeDataset.push('');
-		pvalueDataset.push('');
-		pvalueOriginalDataset.push('');
-		
-		analysisList += selectedAnalyses[i].id;
-		
-		if (selectedAnalyses.length-1 > i){
-			analysisList += ',';
-		}
-		
-	}
-	
-	//do this first, without data, to create loading place holder while getting data
-	createCrossTrialSummaryChart(foldchangeDataset,pvalueDataset, pvalueOriginalDataset, search_keyword_id, true);
-
-	rwgAJAXManager.add({
-		url:getCrossTrialBioMarkerSummaryURL,
-		data: {analysisList: analysisList, search_keyword:search_keyword_id },
-		timeout:60000,
-		success: function(data) {
-			
-			//store the response
-			jQuery('body').data("xtBioMarkerSummaryData:" + search_keyword_id, data); 
-			
-			
-			//prepare the data into arrays before creating chart
-			jQuery(selectedAnalyses).each(function(index, value){
-				
-				var result = data.filter(function(el){return el.bio_assay_analysis_id == selectedAnalyses[index].id});
-				var fold_change_ratio;
-				var preferred_pvalue;
-				
-				if(result[0] == null){
-					fold_change_ratio = '';
-					foldchangeDataset[index] = fold_change_ratio;
-				}
-				 else {
-					 fold_change_ratio = result[0].fold_change_ratio;
-					 if (fold_change_ratio == null)  {
-						 fold_change_ratio = '';
-					 }
-					 foldchangeDataset[index] = fold_change_ratio;
-				 }
-				
-				if(result[0] == null){
-					preferred_pvalue = '';
-					pvalueDataset[index]=preferred_pvalue;
-					pvalueOriginalDataset[index]=preferred_pvalue;
-				}
-				 else {
-					 preferred_pvalue = result[0].preferred_pvalue;
-					 if (preferred_pvalue == null)  {
-						 preferred_pvalue = '';
-						 pvalueDataset[index] = '';
-					 }
-					 else {
-						 if(preferred_pvalue<.00001) {					 
-							 preferred_pvalue=0.00001
-						 }
-						 pvalueDataset[index]= -1 * (Math.log(preferred_pvalue) / Math.log(10)); //calculate the -log10(p-value)
-					 };
-					 pvalueOriginalDataset[index]=preferred_pvalue;
-				 }
-				
-			});
-			
-
-			//Draw chart
-			createCrossTrialSummaryChart(foldchangeDataset,pvalueDataset, pvalueOriginalDataset, search_keyword_id, false);
-			
-		   
-		}
-	});
-	
-}
-
-function addXTSelectedKeyword(keywordId, searchTerm, categoryId) {	
-	// first check if the keyword id is already on array
-	var found = false;
-	for (var i =0; i < xtSelectedKeywords.length; i++)  {
-	   if (xtSelectedKeywords[i].id == keywordId) {
-			  found = true;
-		      break;
-	   }
-	}	 
-	if (!found)  {		
-		xtSelectedKeywords.push({id: keywordId, termName: searchTerm, categoryId: categoryId });
-	}
-	
-}
-
-function addXTSearchAutoComplete()	{
-	jQuery("#xtSearch-ac").autocomplete({
-		source: searchAutoCompleteCTAURL,
-		minLength:0,
-		select: function(event, ui) {  
-
-			//TODO: Determine if the result is a single gene or a pathway/gene signature/etc.
-			//will display different results depending on what was selected
-						
-			
-			var keywordId = ui.item.id;
-			var searchTerm = ui.item.label;
-			var categoryId = ui.item.categoryId;
-						
-			switch (categoryId)  {
-				case "GENE": 
-				case "PROTEIN":
-					addXTSelectedKeyword(keywordId, searchTerm, categoryId);
-					getCrossTrialGeneSummary(keywordId);
-					
-					jQuery('#xtMenuBar').tabs('select', 'xtGeneChartTab'); // switch to chart tab
-
-					
-					break;
-				case "GENELIST": 
-				case "GENESIG": 
-				case "PATHWAY":
-					loadHeatmapCTAPaginator(categoryId, keywordId, 1, searchTerm);
-					jQuery('#xtMenuBar').tabs('select', 'xtHeatmapTab'); // switch to heatmap tab
-					addXTSelectedKeyword(keywordId, searchTerm, categoryId);
-					
-					break;
-				default:  
-					alert("Invalid category!");
-			}
-			setSaveXTFilterLink();
-			setClearXTLink();
-			
-			displayxtAnalysesList();
-			
-			// clear the search text box
-			jQuery("#xtSearch-ac").val("");
-			
-			
+	//If passed a null analysisId, check to see if an analysis is displayed, then update it.
+	if (analysisId == null) {
+		var currentId = jQuery('#gridViewWrapperAnalysis').attr('name');
+		if (currentId == null || currentId == 0) {
 			return false;
 		}
-	}).data("autocomplete")._renderItem = function( ul, item ) {
-		return jQuery('<li></li>')		
-		  .data("item.autocomplete", item )
-		  .append('<a><span class="category-' + item.category.toLowerCase() + '">' + item.category + '&gt;</span>&nbsp;<b>' + item.label + '</b>&nbsp;' + item.synonyms + '</a>')
-		  .appendTo(ul);
-	};	
-		
-	return false;
-}
-
-
-//This function is used when the user clicks on the gene name from the
-//cross trial analysis heatmap ("heatmap" tab). Note that the search keyword 
-//is passed in
-function openGeneFromCTAheatmap(searchkeyword, termName, categoryId){
+		analysisId = currentId;
+	}
 	
-		addXTSelectedKeyword(searchkeyword, termName, categoryId);
-		getCrossTrialGeneSummary(searchkeyword);
-		jQuery('#xtMenuBar').tabs('select', 'xtGeneChartTab'); // switch to chart tab
-		
-		setSaveXTFilterLink();
-		setClearXTLink();
-}
-
-
-//This function is used when the user clicks on gene name from the heatmap
-//for a specific analysis (not the CTA heatmap). Note that the biomarkerID
-//is passed in, which is used to find the searchkeyword ID
-function openGeneFromAnalysisHeatmap(biomarkerID, termName, categoryId){
-	
-	rwgAJAXManager.add({
-		url:getSearchKeywordIDfromExternalIDURL,
-		data: {externalID: biomarkerID},
-		timeout:60000,
-		success: function(result) {
-		
-			addXTSelectedKeyword(result, termName, categoryId);
-			getCrossTrialGeneSummary(result);
-			jQuery('#xtMenuBar').tabs('select', 'xtGeneChartTab'); // switch to chart tab
-
-			setSaveXTFilterLink();
-			setClearXTLink();
-			
-		}
-	});
-
-}
-
-
-
-//Load the heatmap data for cross trial analysis 
-//analysisIds: pipe delimited list of analysis ids
-//category: GENELIST, GENESIG, or PATHWAY
-//searchKeywordId: the search keyword if for the gene list, gene sig, or pathway
-//startRank: first index on the page to be retrieved
-//endRank: last index on the page to be retrieved
-//keyword: the text of the search keyword (to be used in title of heatmap)
-function loadHeatmapCTA(analysisIds, category, searchKeywordId, startRank, endRank, keyword)	{	
-	
-
-	var heatmapDiv = "xtHeatmap_" +searchKeywordId;
-	var heatmapHolderDivID = "xtHeatmapHolder_" +searchKeywordId;
-	
-
-	
-	rwgAJAXManager.add({
-		url:getHeatmapCTARowsURL,
-		data: {analysisIds: analysisIds, category:category, searchKeywordId:searchKeywordId, 
-			   startRank:startRank, endRank:endRank},
-		timeout:60000,
+	jQuery('#gridViewWrapperAnalysis').empty().addClass('ajaxloading');
+	$j.ajax({
+		url:analysisDataURL,
+		data: {id: analysisId, full: full},
 		success: function(response) {
-			
-			jQuery('#'+heatmapHolderDivID).unmask(); //hide the loading msg, unblock the div
-			
-			drawHeatmapCTA(heatmapDiv, response['rows'], selectedAnalyses, keyword);
-			
-						
+			jQuery('#gridViewWrapperAnalysis').removeClass('ajaxloading');
+	 	 	var dtAnalysis  = new dataTableWrapper('gridViewWrapperAnalysis', 'gridViewTableAnalysis', 'Title', [[2, "asc"]], 25);
+	   		dtAnalysis.loadData(response);
+	   		if (!full && response.rowCount > 1000) {
+		   		jQuery('#loadfullanalysis').text('Load all ' + response.rowCount + ' rows')
+	   			jQuery('#partialanalysiswarning').show();
+	   		}
+	   		if (response.filteredByGenes) {
+		   		jQuery('#analysisgenefilteredwarning').show();
+		   	}
 		},
 		error: function(xhr) {
-			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
+			alert(xhr.message);
 		}
 	});
-		
 }
 
-function loadHeatmapCTAPaginator(category, searchKeywordId, page, keyword) {
-	
-	//heatmapHolder div holds both the paginator and the heatmap
-	var divID = "xtHeatmapHolder_" +searchKeywordId;
-	var divPaginatorID = "xtHeatmapPaginator_"+searchKeywordId;
-
-	
-    //remove the div if it already exists:
-    jQuery('#'+divID).remove();
-    
-    //remove the "empty" msg if it exists:
-    jQuery("#xtNoHeatmapsMsg").fadeOut(200);
-    
-    //create div to hold svg chart
-    jQuery("#xtCTAHeatmapArea").prepend("<div id='"+divID +"' class='xtHeatmap'></div>");
-    
-    //insert the paginator div inside the heatmapHolder div
-    jQuery("#"+divID).append("<div id='"+divPaginatorID +"' class='pagination'></div>");
-
-
-	var analysisIds = "";
-	
-	// retrieve list of selected analyses, create a pipe delimited list of analysis ids
-	for (var i=0; i<selectedAnalyses.length; i++)
-	{
-		if (analysisIds != "")  {
-			analysisIds += "|";
-		}
-		analysisIds += selectedAnalyses[i].id;
-	}
-		
-	rwgAJAXManager.add({
-		url:getHeatmapCTARowCountURL,		
-		data: {analysisIds: analysisIds, category: category, searchKeywordId: searchKeywordId, page:page},
-		success: function(response) {								
-			var numRows = response['totalCount'];
-			var facetCounts = response['facetCounts'];
-			var html = response['html'];
-			var errorMsg = response['errorMsg'];
-			
-			if (errorMsg != '')  {
-				alert(errorMsg);
-			}
-
-			getHeatmapPaginatorCTA(divPaginatorID, analysisIds, category, searchKeywordId, numRows, keyword);
-	
-		},
-		error: function(xhr) {
-			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
-		}
-	});
-	
-	
-    //add some buttons
-	//html for button to close the graph
-	var closeHTML = "<a href='#' class='xtClostbtn' id='" +searchKeywordId  +"_CTAheatmapCloseBtn' onclick=\"closeCTAheatmap('"+divID+"', '" +searchKeywordId +"')\">x</a>";
-    jQuery('#'+divID).prepend(closeHTML);
-	
-}
-
-function getHeatmapPaginatorCTA(divID, analysisIds, category, searchKeywordId, numberRows, keyword) {
-	
-	var heatmapHolderDivID = "xtHeatmapHolder_" +searchKeywordId;
-	
-	var heatmapDiv = "xtHeatmap_" +searchKeywordId;
-    
-    //create div for the heatmap
-    jQuery("#"+searchKeywordId+"_CTAheatmapCloseBtn").after("<div id='"+heatmapDiv +"' ></div>");
-	
-	
-	var element = jQuery("#" + divID);
-	var numberOfRowsPerPage = 20;
-		
-	// get number of extra genes on last page (will be 0 if last page is full)
-	var numberRowsLastPage = numberRows % numberOfRowsPerPage;
-	
-	// find number of full pages
-	var numberOfFullPages = Math.floor(numberRows / numberOfRowsPerPage);
-	
-	// find number of pages - equal to number of full pages if none left over after full pages
-	var numberOfPages = numberOfFullPages;        	        	
-	if (numberRowsLastPage > 0)  {
-		numberOfPages = numberOfPages + 1;
-	}
-	
-	//if there is only 1 page, just hide the paging control since it's not needed
-	if(numberOfPages==1){
-		element.hide();
-	}
-	else  {
-		element.show();
-	}
-
-	element.paging(numberOfPages, { 
-	    perpage:1, 
-      format:"[<(qq -) n (- pp)>]",
-      onSelect: function (page) { 
-      	jQuery("#"+heatmapHolderDivID).mask("Loading...");
-
-      	var startRank = (page - 1)*numberOfRowsPerPage + 1
-      	var endRank = (page)*numberOfRowsPerPage
-      	
-      	if (endRank > numberRows)  {
-      		endRank = numberRows
-      	}
-      	
-      	if (numberRows == 0)  {
-			jQuery('#'+heatmapHolderDivID).unmask(); //hide the loading msg, unblock the div
-			
-			//html for button to close the graph
-			//var closeHTML = "<a href='#' class='xtClostbtn' id='" +searchKeywordId  +"_CTAheatmapCloseBtn' onclick=\"closeCTAheatmap('"+heatmapHolderDivID+"', '" +searchKeywordId +"')\">x</a>";
-							    
-      		drawHeatmapCTA(heatmapDiv, null, selectedAnalyses, keyword);  // draw blank heatmap
-      		
-      	}
-      	else  {      		
-    		loadHeatmapCTA(analysisIds, category, searchKeywordId, startRank, endRank, keyword);   
-      	}
-
-                                  
-      }, 
-      onFormat: formatPaginator
-  }); 	
-	
-}
-
-
-function openXtBoxplot(keywordId, geneName){
-	
-	/* 
-	
-	jQuery('#xtBoxplot').modal({onOpen: modalEffectsOpen, opacity: [70], onClose: modalEffectsClose,
-		onShow: function (dialog) {
-	        dialog.container.css("height", "auto");
-	        dialog.container.css("width", "80%");
-	        dialog.container.css("left", "10%");
-	        dialog.container.css("top", "10%");
-	    }	
-	
-	});
-	
-	*/
-	
-	//find width of window, multiply by % to get dialog width
-	var wWidth = jQuery(window).width() * 0.8;
-	
-	jQuery('#xtBoxplotHolder').dialog({ width: wWidth, title: geneName });
-	
-	jQuery('#xtBoxplotHolder').mask("Loading...");
-    
-
-    loadBoxPlotCTA(keywordId);
-    
-    return;
-
-	
-}
-
-
-
-
-//Load the box plot data for cross trial analysis (the keywordId must represent a gene)
-function loadBoxPlotCTA(keywordId)	{	
-	
-	var ids = "";
-	
-	// retrieve list of selected analyses, create a pipe delimited list of analysis ids
-	for (var i=0; i<selectedAnalyses.length; i++)
-	{
-		if (ids != "")  {
-			ids += "|";
-		}
-		ids += selectedAnalyses[i].id;
-	}
-    jQuery('#xtBoxplotWrapper').mask("Loading...");
-
-	rwgAJAXManager.add({
-		url:getBoxPlotDataCTAURL,
-		data: {ids: ids, keywordId: keywordId},
-		timeout:60000,
-		success: function(response) {
-			
-			drawBoxPlotD3('xtBoxplot', response, null, false, true, selectedAnalyses);
-			
-			jQuery('#xtBoxplotHolder').unmask();
-			
-		},
-		error: function(xhr) {
-			console.log('Error!  Status = ' + xhr.status + xhr.statusText);
-		}
-	});
-	
-	
-}
-
-
-
-
-function formatPaginator(type) {      
-    
-    switch (type) {      
-    case 'block':      
-        	if (!this.active)      
-        		return '<span class="disabled">' + this.value + '</span>';      
-        	else if (this.value != this.page)      
-            return '<em><a href="#' + this.value + '">' + this.value + '</a></em>';      
-        	return '<span class="current">' + this.value + '</span>';      
-    case 'left':      
-    case 'right':      
-
-            if (!this.active)      
-                    return '';      
-            else       
-                    return '<em><a href="#' + this.value + '">' + this.value + '</a></em>';      
-
-    case 'next':      
-
-            if (this.active) {      
-                    return '<a href="#' + this.value + '" class="next">Next &raquo;</a>';      
-            }      
-            return '<span class="disabled">Next &raquo;</span>';      
-
-    case 'prev':      
-
-            if (this.active) {      
-                    return '<a href="#' + this.value + '" class="prev">&laquo; Previous</a>';      
-            }      
-            return '<span class="disabled">&laquo; Previous</span>';      
-
-    case 'first':      
-
-            if (this.active) {      
-                    return '<a href="#' + this.value + '" class="first">|&lsaquo;</a>';      
-            }      
-            return '<span class="disabled">|&lsaquo;</span>';      
-
-    case 'last':      
-
-            if (this.active) {      
-                    return '<a href="#' + this.value + '" class="prev">&rsaquo;|</a>';      
-            }      
-            return '<span class="disabled">&rsaquo;|</span>';      
-
-    case 'fill':      
-            if (this.active) {      
-                    return "...";      
-            }      
-    }      
-}
-
+//Globally prevent AJAX from being cached (mostly by IE)
+jQuery.ajaxSetup({
+	cache: false
+});

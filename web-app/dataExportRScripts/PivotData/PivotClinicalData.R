@@ -12,7 +12,7 @@
  # 
  # This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS    * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
  # 
- # You should have received a copy of the GNU General Public License along with this program.  If not, see http://www.gnu.org/licenses/.
+ # You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
  # 
  #
  ##########################################################################
@@ -32,8 +32,9 @@ input.dataFile, snpDataExists, multipleStudies, study
   print(snpDataExists)
   
 	#Read the input file.
+	# === for ABIRISK === WG, SE & VS @ eTRIKS_WP4_UL
 	dataFile <- data.frame(read.delim(input.dataFile))
-	
+
 	#Split the data by the CONCEPT_PATH.
 	splitData <- split(dataFile,dataFile$CONCEPT.PATH)
   foo <- unique(dataFile[c("PATIENT.ID")])

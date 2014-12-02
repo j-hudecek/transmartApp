@@ -1,23 +1,3 @@
-/*************************************************************************
- * tranSMART - translational medicine data mart
- * 
- * Copyright 2008-2012 Janssen Research & Development, LLC.
- * 
- * This product includes software developed at Janssen Research & Development, LLC.
- * 
- * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License 
- * as published by the Free Software  * Foundation, either version 3 of the License, or (at your option) any later version, along with the following terms:
- * 1.	You may convey a work based on this program in accordance with section 5, provided that you retain the above notices.
- * 2.	You may convey verbatim copies of this program code as you receive it, in any medium, provided that you retain the above notices.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS    * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License along with this program.  If not, see http://www.gnu.org/licenses/.
- * 
- *
- ******************************************************************/
-  
-
 function createMainTabPanel() {
 
     // create toolbar
@@ -31,17 +11,14 @@ function createMainTabPanel() {
 
 // create search tabs with TEA
 function createSearchTabs(toolbar) {
-	var x = jQuery(window).innerWidth();
-	var y = jQuery(window).innerHeight();
-	
-	// create search tabs
+
+    // create search tabs
     var tabpanel = new Ext.TabPanel({
         id: "tab-panel",
         tbar: toolbar,
         activeTab: pageData.activeTab,
-        renderTo: "maintabs-div",
-        width: x-1,     // Subtract 1 so the scrollbar appears on screen
-        height: y-125,  // Subtract 250 for the padding and other header stuff
+        autoScroll: true,
+        //region: "center",
         items: [ 
             {
                 id: "tab1",
@@ -207,6 +184,18 @@ function createSearchTabs(toolbar) {
                 defaultSrc: pageData.pictor.resultsUrl
             },
             {
+                id: "tab7",
+                iconCls: "resnetTab",
+                title: "ResNet",
+                listeners: {activate: activateTab},
+                xtype: "iframepanel",
+                closable: false,
+                loadMask: true,
+                defaultSrc: pageData.resnet.resultsUrl,
+                tabTip: pageData.resnet.credentials
+            } 
+            , 
+            {
                 id: "tab8",
                 iconCls: "genegoTab",
                 title: "GeneGo",
@@ -216,18 +205,8 @@ function createSearchTabs(toolbar) {
                 loadMask: true,
                 defaultSrc: pageData.genego.resultsUrl,
                 tabTip: pageData.genego.credentials
-            },
-            ,
-            {
-                id: "tab18",
-                iconCls: "cortellisTab",
-                title: "Cortellis",
-                listeners: {activate: activateTab},
-                xtype: "iframepanel",
-                closable: false,
-                loadMask: true,
-                defaultSrc: pageData.cortellis.resultsUrl
             }
+            
         ]
     });
     return tabpanel;
@@ -292,6 +271,13 @@ function createMainToolbar() {
                iconCls: "exportSummaryBtn"
            },
            {
+               id: "exportresnet-button",
+               text: "Export to ResNet",
+               handler: exportResNet,
+               cls: "x-btn-text-icon",
+               iconCls: "exportResNetBtn"               
+           },
+           {
 				id:'contextHelp-button',
 			    handler: function(event, toolEl, panel){
 			    	D2H_ShowHelp(filterContextHelpId,helpURL,"wndExternal",CTXT_DISPLAY_FULLHELP );
@@ -312,7 +298,7 @@ function activateTab(tab) {
         setButtonVisibility("filters", true);
         setButtonVisibility("summary", false);
         if(pageData.trial.count>0) {
-            setButtonVisibility("heatmap", false);    // Disable the heatmap until after we refactor out prototype libraries 
+            setButtonVisibility("heatmap", true);
             setButtonVisibility("studyview", true);
 
             if(pageData.trial.analysisCount>0) {
@@ -440,17 +426,6 @@ function activateTab(tab) {
         setButtonVisibility("tea",false);
         setButtonVisibility("contextHelp", false);
         break;
-
-    case "tab18":
-        setButtonVisibility("filters", false);
-        setButtonVisibility("summary", false);
-        setButtonVisibility("heatmap", false);
-        setButtonVisibility("exportsummary", false);
-        setButtonVisibility("exportresnet", false);
-        setButtonVisibility("studyview", false)
-        setButtonVisibility("tea",false);
-        setButtonVisibility("contextHelp", false);
-        break;
     }
 }
 
@@ -556,7 +531,7 @@ function showFilters(button) {
         }
         layout.setActiveItem(1);
     } else {
-        layout.setActiveItem(2);
+        layout.setActiveItem(0);
     }
 
     var showFiltersButton = Ext.getCmp("filters-show-button");
@@ -644,10 +619,6 @@ function showStudyView(button){
     var activeitem = layout.activeItem;
     layout.setActiveItem(2);
     showContextSpecificHelp(activetab, button);
-    var showFiltersButton = Ext.getCmp("filters-show-button");
-    var hideFiltersButton = Ext.getCmp("filters-hide-button");
-    showFiltersButton.setVisible(true);
-    hideFiltersButton.setVisible(false);
 }
 
 function setButtonVisibility(id, visibility) {
@@ -776,6 +747,10 @@ function selectJubilantPanel(index) {
     var activetab = tabpanel.getActiveTab();
     var layout = activetab.getLayout();
     layout.setActiveItem(index);
+}
+
+function onItemCheck(item, checked){
+    ;
 }
 
 function popupWindow(mylink, windowname) {

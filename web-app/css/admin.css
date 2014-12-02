@@ -1,4 +1,4 @@
-div.body { padding-top:45px; }
+div.body { padding-top:20px; }
 h1 { font-weight:bold; font-size:10pt; padding-bottom:10px; }
 th { font-weight:bold; padding:5px 5px 0 5px }
 td { padding:5px 5px 5px 5px; }
@@ -43,14 +43,7 @@ margin: 0 0 0 0;
 padding: 1px 1px 1px 1px;
 }
 
-/* Overwrite table tags from main.css so we can change the line-height */
-td, th {
-    font: 12px verdana, arial, helvetica, sans-serif;
-    line-height:2; 
-    padding: 0px;
-    text-align: left;
-    vertical-align: top;
-}
+
 
 /*----------------------------------------------------------*/
 /*  Improved vertical menu for navbar: see http://css.maxdesign.com.au/listamatic/vertical10.htm
@@ -59,7 +52,7 @@ td, th {
 h1.panelHeader{
 font-weight: bold;
 text-align: left;
-padding-top:25;
+padding: 8px 0px 0px 0px;
 border-bottom: 2px solid #000;
 }
 
@@ -148,4 +141,16 @@ width:300px;
     right:0;
     height:24px;
     z-index:100;
+}
+
+tr.odd .pluginPropertiesBox {
+    margin: 10px;
+    padding: 10px;
+    background-color: #e3e3e3;
+}
+
+tr.even .pluginPropertiesBox {
+    margin: 10px;
+    padding: 10px;
+    background-color: #f3f3f3;
 }
