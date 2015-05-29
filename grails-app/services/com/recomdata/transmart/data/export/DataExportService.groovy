@@ -1,12 +1,16 @@
 package com.recomdata.transmart.data.export
 
-import com.google.common.base.CharMatcher
 import com.recomdata.snp.SnpData
 import com.recomdata.transmart.data.export.exception.DataNotFoundException
 import groovy.json.JsonSlurper
 import groovy.sql.Sql
 import org.apache.commons.lang.StringUtils
 import org.springframework.transaction.annotation.Transactional
+import org.transmartproject.core.ontology.OntologyTerm
+import org.transmartproject.core.ontology.Study
+import org.transmartproject.core.users.User
+
+import static org.transmartproject.core.users.ProtectedOperation.WellKnownOperations.EXPORT
 
 class DataExportService {
 
@@ -24,6 +28,9 @@ class DataExportService {
     def additionalDataService
     def vcfDataService
     def dataSource
+    def queriesResourceAuthorizationDecorator
+    def studiesResourceService
+    def conceptsResourceService
 
     @Transactional(readOnly = true)
     def exportData(jobDataMap) {
@@ -60,9 +67,6 @@ class DataExportService {
             def snpFilesMap = [:]
             def selectedFilesList = subsetSelectedFilesMap.get(subset) ?: []
 
-            // Add all High Dimensional data types available, to the list
-            selectedFilesList?.addAll((selection[subset]?.keySet() ?: []) - ['clinical'])
-
             if (null != selectedFilesList && !selectedFilesList.isEmpty()) {
                 //Prepare Study dir
                 def List studyList = null
@@ -84,17 +88,13 @@ class DataExportService {
                     // Construct a list of the URL objects we're running, submitted to the pool
                     selectedFilesList.each() { selectedFile ->
 
-                        if (StringUtils.equalsIgnoreCase(selectedFile, "CLINICAL.TXT")) {
+                        if (StringUtils.equalsIgnoreCase(selectedFile, "CLINICAL")) {
                             writeClinicalData = true
                         }
 
                         def List gplIds = subsetSelectedPlatformsByFiles?.get(subset)?.get(selectedFile)
                         def retVal = null
                         switch (selectedFile) {
-                            case "STUDY":
-                                break;
-                        // New high dimensional data
-                        // case "MRNA.TXT":
                             case highDimensionResourceService.knownTypes:
                                 //retVal = geneExpressionDataService.getData(studyList, studyDir, "mRNA.trans", jobDataMap.get("jobName"), resultInstanceIdMap[subset], pivotData, gplIds, null, null, null, null, false)
 
@@ -111,10 +111,8 @@ class DataExportService {
                                 highDimDataTypes[subset][selectedFile].keySet().each { format ->
                                     log.info "  Using format " + format
                                     retVal = highDimExportService.exportHighDimData(jobName: jobDataMap.jobName,
-                                            splitAttributeColumn: false,
                                             resultInstanceId: resultInstanceIdMap[subset],
-                                            gplIds: jobDataMap.gplIdsMap[subset][selectedFile],
-                                            conceptPaths: selection[subset][selectedFile].selector,
+                                            conceptKeys: selection[subset][selectedFile].selector,
                                             dataType: selectedFile,
                                             format: format,
                                             studyDir: studyDir
@@ -260,11 +258,17 @@ class DataExportService {
                 }
 
                 if (writeClinicalData) {
+                    def resultInstanceId = resultInstanceIdMap[subset]
                     //Grab the item from the data map that tells us whether we need the concept contexts.
                     Boolean includeConceptContext = jobDataMap.get("includeContexts", false);
 
+                    List<OntologyTerm> filterTerms = columnFilter.collect {
+                        conceptsResourceService.getByKey it
+                    }
+                    List<OntologyTerm> filterLeafTerms = getAllLeafTerms(filterTerms)
+
                     //This is a list of concept codes that we use to filter the result instance id results.
-                    String[] conceptCodeList = jobDataMap.get("concept_cds");
+                    String[] conceptCodeList =  filterLeafTerms*.code
 
                     //This is list of concept codes that are parents to some child concepts. We need to expand these out in the service call.
                     List parentConceptCodeList = new ArrayList()
@@ -289,7 +293,7 @@ class DataExportService {
                     def platformsList = subsetSelectedPlatformsByFiles?.get(subset)?.get("MRNA.TXT")
                     //Reason for moving here: We'll get the map of SNP files from SnpDao to be output into Clinical file
                     def retVal = clinicalDataService.getData(studyList, studyDir, "clinical.i2b2trans", jobDataMap.get("jobName"),
-                            resultInstanceIdMap[subset], conceptCodeList, selectedFilesList, pivotData, filterHighLevelConcepts,
+                            resultInstanceId, conceptCodeList, selectedFilesList, pivotData, filterHighLevelConcepts,
                             snpFilesMap, subset, filesDoneMap, platformsList, parentConceptCodeList as String[], includeConceptContext)
 
                     if (jobDataMap.get("analysis") != "DataExport") {
@@ -297,86 +301,73 @@ class DataExportService {
                         if (!retVal) {
                             throw new DataNotFoundException("There are no patients that meet the criteria selected therefore no clinical data was returned.")
                         }
-                    }
-
-                    if (jobDataMap.analysis == 'DataExport') {
-
-                        def resultInstanceId = resultInstanceIdMap[subset]
-
-                        def mapOfSampleCdsBySource = buildMapOfSampleCdsBySource(resultInstanceId)
-
-                        def sampleCodesTable = new Sql(dataSource).rows("""
-                                        SELECT DISTINCT
-                                            p.SOURCESYSTEM_CD
-                                        FROM
-                                            patient_dimension p
-                                        WHERE
-                                            p.PATIENT_NUM IN (
-                                                SELECT
-                                                    DISTINCT patient_num
-                                                FROM
-                                                    qt_patient_set_collection
-                                                WHERE
-                                                    result_instance_id = ? )
-                                    """, resultInstanceId)
-                        for (row in sampleCodesTable) {
-                            row.SAMPLE_CDS = mapOfSampleCdsBySource[row.SOURCESYSTEM_CD]
-                        }
-                        sampleCodesTable = sampleCodesTable.collectEntries {
-                            [it.SOURCESYSTEM_CD.split(':')[-1].trim(), it.SAMPLE_CDS]
-                        }
-                        // add the header to the mapping table
-                        sampleCodesTable['PATIENT ID'] = 'SAMPLE CODES'
-                        // example: columnFilter = [/\Subjects\Ethnicity/, /\Endpoints\Diagnosis/]
-                        studyList.each { studyName ->
-                            String directory
-                            String fileWritten = "clinical_i2b2trans.txt"
-                            if (studyList.size() > 1) {
-                                // yes, the output of the previous stage has a " _" in the name, with a space in it.
-                                fileWritten = studyName + ' _' + fileWritten
-
-                            }
-                            directory = clinicalDataFileName(studyDir.path)
-
-                            def reader = new File(directory, fileWritten)
-                            def writer = new File(directory, "newclinical")
-                            def writerstream = writer.newOutputStream()
-
-                            def filter = null
-
-                            reader.eachLine {
-                                def line = Arrays.asList(it.split('\t'))
-                                if (filter == null) {
-                                    if (columnFilter) {
-                                        filter = []
-                                        for (String columnName : columnFilter) {
-                                            columnName = CharMatcher.is('\\' as char).trimTrailingFrom(columnName)
-                                            String parentColumnName = columnName.replaceFirst(/\\[^\\]+$/, '')
-                                            def index = line.findIndexOf() {
-                                                columnName.endsWith(it) ||
-                                                        parentColumnName.endsWith(it)
-                                            }
-                                            if (index >= 1 && !(index in filter)) filter.add(index)
-                                        }
-                                    } else {
-                                        filter = 1..(line.size() - 1)
-                                    }
-                                }
-                                def patientId = line[0].trim()
-                                def joined = ((line[[0]] + [sampleCodesTable[patientId]] + line[filter])
-                                        .join('\t') + '\n')
-                                writerstream.write(joined.getBytes())
-                            }
-
-                            writerstream.close()
-
-                            writer.renameTo(directory + '/' + fileWritten)
-                        }
+                    } else {
+                        insertSamplesColumnIntoFiles(resultInstanceId, studyList, studyDir)
                     }
                 }
             }
         }
 
+    }
+
+    //TODO It's dirty workaround. Remove it and
+    private insertSamplesColumnIntoFiles(resultInstanceId, studyList, studyDir) {
+
+        def mapOfSampleCdsBySource = buildMapOfSampleCdsBySource(resultInstanceId)
+        if (!mapOfSampleCdsBySource) {
+            return
+        }
+
+        def sampleCodesTable = mapOfSampleCdsBySource.collectEntries {
+            [it.key.split(':')[-1].trim(), it.value]
+        }
+        // add the header to the mapping table
+        sampleCodesTable['PATIENT ID'] = 'SAMPLE CODES'
+        // example: columnFilter = [/\Subjects\Ethnicity/, /\Endpoints\Diagnosis/]
+        studyList.each { studyName ->
+            String directory
+            String fileWritten = "clinical_i2b2trans.txt"
+            if (studyList.size() > 1) {
+                // yes, the output of the previous stage has a " _" in the name, with a space in it.
+                fileWritten = studyName + ' _' + fileWritten
+
+            }
+            directory = clinicalDataFileName(studyDir.path)
+
+            def reader = new File(directory, fileWritten)
+            def writer = new File(directory, "newclinical")
+            def writerstream = writer.newOutputStream()
+
+            def filter = null
+
+            reader.eachLine {
+                def line = Arrays.asList(it.split('\t'))
+                if (filter == null) {
+                    filter = 1..(line.size() - 1)
+                }
+                def patientId = line[0].trim()
+                def joined = ((line[[0]] + [sampleCodesTable[patientId] ?: ''] + line[filter])
+                        .join('\t') + '\n')
+                writerstream.write(joined.getBytes())
+            }
+
+            writerstream.close()
+
+            writer.renameTo(directory + '/' + fileWritten)
+        }
+    }
+
+    private List<OntologyTerm> getAllLeafTerms(List<OntologyTerm> terms) {
+        List<OntologyTerm> leafs = []
+        terms.each { OntologyTerm term ->
+            def children = term.children
+            if (children) {
+                leafs += getAllLeafTerms(children)
+            } else {
+                leafs << term
+            }
+        }
+        leafs
     }
 
     def buildMapOfSampleCdsBySource(resultInstanceId) {
@@ -390,7 +381,8 @@ class DataExportService {
             LEFT JOIN
                 observation_fact s on s.patient_num = p.patient_num
             WHERE
-                p.PATIENT_NUM IN (
+                s.SAMPLE_CD IS NOT NULL
+                AND p.PATIENT_NUM IN (
                     SELECT
                         DISTINCT patient_num
                     FROM
@@ -435,4 +427,22 @@ class DataExportService {
 
     }
 
+    boolean isUserAllowedToExport(final User user, final List<Long> resultInstanceIds) {
+        assert user
+        assert resultInstanceIds
+        // check that the user has export access in the studies of patients
+        Set<Study> studies = resultInstanceIds.findAll().collect {
+            queriesResourceAuthorizationDecorator.getQueryResultFromId it
+        }*.patients.
+            inject { a, b -> a + b }. // merge two patient sets into one
+            inject([] as Set, { a, b -> a + b.trial }).
+            collect { studiesResourceService.getStudyById it }
+
+        Study forbiddenExportStudy = studies.find { Study study ->
+            if (!user.canPerform(EXPORT, study)) {
+                return true
+            }
+        }
+        !forbiddenExportStudy
+    }
 }

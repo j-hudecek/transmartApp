@@ -6,68 +6,126 @@ import org.transmartproject.core.dataquery.highdim.AssayColumn
 import org.transmartproject.core.dataquery.highdim.HighDimensionDataTypeResource
 import org.transmartproject.core.dataquery.highdim.assayconstraints.AssayConstraint
 import org.transmartproject.core.dataquery.highdim.projections.Projection
-import org.transmartproject.db.dataquery.highdim.assayconstraints.PlatformConstraint
+import org.transmartproject.core.ontology.OntologyTerm
 import org.transmartproject.export.HighDimExporter
 
 class HighDimExportService {
 
     def highDimensionResourceService
     def highDimExporterRegistry
+    def queriesResourceService
+    def conceptsResourceService
 
     // FIXME: jobResultsService lives in Rmodules, so this is probably not a dependency we should have here
     def jobResultsService
 
+    /**
+     * - args.conceptPaths (optional) - collection with concept keys (\\<tableCode>\<conceptFullName>) denoting data
+     * nodes for which to export data for.
+     * - args.resultInstanceId        - id of patient set for denoting patients for which export data for.
+     * - args.studyDir (File)         - directory where to store exported files
+     * - args.format                  - data file format (e.g. "TSV", "VCF"; see HighDimExporter.getFormat())
+     * - args.dataType                - data format (e.g. "mrna", "acgh"; see HighDimensionDataTypeModule.getName())
+     * - args.jobName                 - name of the current export job to check status whether we need to break export.
+     */
     def exportHighDimData(Map args) {
-        String jobName = args.jobName
-        String dataType = args.dataType
-        def resultInstanceId = args.resultInstanceId
-        List<String> conceptPaths = args.conceptPaths
-        String studyDir = args.studyDir
-        Collection<String> gplIds = args.gplIds
-        String format = args.format
+        Long resultInstanceId = args.resultInstanceId as Long
+        List<String> conceptKeys = args.conceptKeys
 
-
-        if (jobIsCancelled(jobName)) {
+        if (jobIsCancelled(args.jobName)) {
             return null
         }
 
+        def fileNames = []
+
+        HighDimensionDataTypeResource dataTypeResource = highDimensionResourceService.getSubResourceForType(args.dataType)
+        def ontologyTerms
+        if (conceptKeys) {
+            ontologyTerms = conceptKeys.collectAll { conceptsResourceService.getByKey it }
+        } else {
+            def queryResult = queriesResourceService.getQueryResultFromId(resultInstanceId)
+            ontologyTerms = dataTypeResource.getAllOntologyTermsForDataTypeBy(queryResult)
+        }
+
+        ontologyTerms.each { OntologyTerm term ->
+            // Add constraints to filter the output
+            List<File> files = exportForSingleNode(
+                    term,
+                    resultInstanceId,
+                    args.studyDir,
+                    args.format,
+                    args.dataType,
+                    args.jobName)
+
+            fileNames.addAll(files*.absolutePath)
+        }
+
+        fileNames
+    }
+
+    List<File> exportForSingleNode(OntologyTerm term, Long resultInstanceId, File studyDir, String format, String dataType, String jobName) {
+
+        List<File> outputFiles = []
+
         HighDimensionDataTypeResource dataTypeResource = highDimensionResourceService.getSubResourceForType(dataType)
 
-        // Add constraints to filter the output
-        def assayconstraints = []
+        def assayConstraints = []
 
-        assayconstraints << dataTypeResource.createAssayConstraint(
+        assayConstraints << dataTypeResource.createAssayConstraint(
                 AssayConstraint.PATIENT_SET_CONSTRAINT,
                 result_instance_id: resultInstanceId)
 
-        assayconstraints << new PlatformConstraint(gplIds: gplIds)
-
-        assayconstraints << dataTypeResource.createAssayConstraint(
-                AssayConstraint.DISJUNCTION_CONSTRAINT,
-                subconstraints:
-                        [(AssayConstraint.ONTOLOGY_TERM_CONSTRAINT): conceptPaths.collect { [concept_key: it] }])
+        assayConstraints << dataTypeResource.createAssayConstraint(
+                AssayConstraint.ONTOLOGY_TERM_CONSTRAINT,
+                concept_key: term.key)
 
         // Setup class to export the data
         HighDimExporter exporter = highDimExporterRegistry.getExporterForFormat(format)
         Projection projection = dataTypeResource.createProjection(exporter.projection)
 
-        File outputFile = new File(studyDir, dataType + '.' + format.toLowerCase())
-        String fileName = outputFile.getAbsolutePath()
-
         // Retrieve the data itself
-        TabularResult<AssayColumn, DataRow<Map<String, String>>> tabularResult =
-                dataTypeResource.retrieveData(assayconstraints, [], projection)
+        TabularResult<AssayColumn, DataRow> tabularResult =
+                dataTypeResource.retrieveData(assayConstraints, [], projection)
 
-        // Start exporting
         try {
-            outputFile.withOutputStream { outputStream ->
-                exporter.export tabularResult, projection, outputStream, { jobIsCancelled(jobName) }
-            }
+            exporter.export(
+                    tabularResult,
+                    projection,
+                    { String dataFileName, String dataFileExt ->
+                        File nodeDataFolder = new File(studyDir, getRelativeFolderPathForSingleNode(term))
+                        File outputFile = new File(nodeDataFolder,
+                                "${dataFileName}_${dataType}.${dataFileExt.toLowerCase()}")
+                        if (outputFile.exists()) {
+                            throw new RuntimeException("${outputFile} file already exists.")
+                        }
+                        nodeDataFolder.mkdirs()
+                        outputFiles << outputFile
+                        outputFile.newOutputStream()
+                    },
+                    { jobIsCancelled(jobName) })
+        } catch (RuntimeException e) {
+            log.error('Data export to the file has thrown an exception', e)
         } finally {
             tabularResult.close()
         }
+        outputFiles
+    }
 
-        return [outFile: fileName]
+    static String getRelativeFolderPathForSingleNode(OntologyTerm term) {
+        def leafConceptFullName = term.fullName
+        String resultConceptPath = leafConceptFullName
+        def study = term.study
+        if (study) {
+            def studyConceptFullName = study.ontologyTerm.fullName
+            //use internal study folders only
+            resultConceptPath = leafConceptFullName.replace(studyConceptFullName, '')
+        }
+
+        resultConceptPath.split('\\\\').findAll().collect { String folderName ->
+            //Reversible way to encode a string to use as filename
+            //http://stackoverflow.com/questions/1184176/how-can-i-safely-encode-a-string-in-java-to-use-as-a-filename
+            URLEncoder.encode(folderName, 'UTF-8')
+        }.join(File.separator)
     }
 
     def boolean jobIsCancelled(jobName) {
