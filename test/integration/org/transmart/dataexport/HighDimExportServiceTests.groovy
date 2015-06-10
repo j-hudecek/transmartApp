@@ -1,6 +1,7 @@
 package org.transmart.dataexport
 
 import com.google.common.io.Files
+import com.recomdata.asynchronous.JobResultsService
 import grails.test.mixin.TestMixin
 import org.gmock.WithGMock
 import org.junit.Before
@@ -35,12 +36,12 @@ class HighDimExportServiceTests {
     void setUp() {
         tmpDir = Files.createTempDir()
         studyTestData.saveAll()
-        i2b2Node = studyTestData.i2b2List[0]
+        i2b2Node = studyTestData.i2b2List.find { it.fullName == '\\foo\\study1\\bar\\' }
 
         testData = new MrnaTestData(conceptCode: i2b2Node.code, patients: studyTestData.i2b2Data.patients)
         testData.saveAll()
 
-        highDimExportService.jobResultsService = [test: [Status: 'In Progress']]
+        highDimExportService.jobResultsService = new JobResultsService(jobResults: [test: [Status: 'In Progress']])
 
         def definition = new QueryDefinition([
                 new Panel(
@@ -63,14 +64,18 @@ class HighDimExportServiceTests {
                 conceptKeys: [ i2b2Node.key.toString() ],
                 dataType: 'mrna',
                 format: 'TSV',
-                studyDir: tmpDir)
+                studyDir: tmpDir,
+                exportMetaData: true)
 
-        assertThat files, allOf (
-                hasSize(1),
-                contains(endsWith('/foo/data_mrna.tsv')))
-        def file = new File(files[0])
-        assertTrue(file.exists())
-        assertThat file.length(), greaterThan(0l)
+        assertThat files, containsInAnyOrder(
+                hasProperty('absolutePath', endsWith('/bar/data_mrna.tsv')),
+                hasProperty('absolutePath', endsWith('/bar/meta.tsv')),
+        )
+
+        files.each { File file ->
+            assertTrue(file.exists())
+            assertThat file.length(), greaterThan(0l)
+        }
     }
 
     @Test
@@ -80,13 +85,17 @@ class HighDimExportServiceTests {
                 resultInstanceId: queryResult.id,
                 dataType: 'mrna',
                 format: 'TSV',
-                studyDir: tmpDir)
+                studyDir: tmpDir,
+                exportMetaData: true)
 
-        assertThat files, allOf (
-                hasSize(1),
-                contains(endsWith('/foo/data_mrna.tsv')))
-        def file = new File(files[0])
-        assertTrue(file.exists())
-        assertThat file.length(), greaterThan(0l)
+        assertThat files, containsInAnyOrder(
+                hasProperty('absolutePath', endsWith('/bar/data_mrna.tsv')),
+                hasProperty('absolutePath', endsWith('/bar/meta.tsv')),
+        )
+
+        files.each { File file ->
+            assertTrue(file.exists())
+            assertThat file.length(), greaterThan(0l)
+        }
     }
 }
